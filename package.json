@@ -1,0 +1,37 @@
+{
+  "name": "menfes",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "worker": "tsx src/worker/index.ts",
+    "admin": "tsx scripts/admin.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "@resvg/resvg-js": "^2.6.2",
+    "dotenv": "^18.0.9",
+    "instagram-private-api": "^1.46.1",
+    "lucide-react": "^1.61.0",
+    "next": "16.4.3",
+    "prisma": "^6.19.3",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "satori": "^0.63.2",
+    "sharp": "^0.35.5",
+    "tsx": "^4.23.15"
+  },
+  "devDependencies": {
+    "@tailwindcss/turbopack": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.3",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
