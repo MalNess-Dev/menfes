@@ -7,21 +7,60 @@ generator client {
   provider = "prisma-client-js"
 }
 
-model Menfess {
+model User {
   id           Int       @id @default(autoincrement())
-  recipient    String?
-  sender       String?
-  message      String
-  status       String    @default("pending") // pending | processing | published | failed | rejected
-  errorMessage String?
-  retryCount   Int       @default(0)
-  igMediaId    String?
+  username     String    @unique
+  passwordHash String
+  salt         String
+  role         String    @default("user") // "user" | "admin"
+  isBanned     Boolean   @default(false)
+  banReason    String?
+  registeredIp String?
+  lastLoginIp  String?
+  userAgent    String?
   createdAt    DateTime  @default(now())
-  publishedAt  DateTime?
-  slideCount   Int       @default(1)
+  updatedAt    DateTime  @updatedAt
+  menfess      Menfess[]
+
+  @@index([username])
+  @@index([role])
+  @@index([isBanned])
+}
+
+model BannedIp {
+  id        Int      @id @default(autoincrement())
+  ip        String   @unique
+  reason    String?
+  bannedAt  DateTime @default(now())
+
+  @@index([ip])
+}
+
+model Menfess {
+  id              Int       @id @default(autoincrement())
+  recipient       String?
+  sender          String?   // Samaran / alias publik yang tampil di IG
+  message         String
+  status          String    @default("pending") // pending | processing | published | failed | rejected
+  errorMessage    String?
+  retryCount      Int       @default(0)
+  igMediaId       String?
+  createdAt       DateTime  @default(now())
+  publishedAt     DateTime?
+  slideCount      Int       @default(1)
+
+  // Audit, Tracking & Kontrol Sender
+  userId          Int?
+  user            User?     @relation(fields: [userId], references: [id])
+  senderUsername  String?   // Akun asli pengirim
+  senderIp        String?   // IP asli pengirim (HP / ISP)
+  senderDevice    String?   // Tipe perangkat (Android / iOS / Desktop)
+  senderUserAgent String?   // Browser User Agent lengkap
 
   @@index([status])
   @@index([createdAt])
+  @@index([userId])
+  @@index([senderIp])
 }
 
 model IgSession {

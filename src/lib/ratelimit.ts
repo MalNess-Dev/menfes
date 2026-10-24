@@ -1,7 +1,5 @@
 import crypto from "crypto";
 
-// Store hashed IPs with their submission timestamps in memory
-// Automatically cleans up entries older than the window
 interface RateLimitRecord {
   count: number;
   resetAt: number;
@@ -10,12 +8,12 @@ interface RateLimitRecord {
 const rateLimitStore = new Map<string, RateLimitRecord>();
 
 const SALT = process.env.RATE_LIMIT_SALT || "menfess-default-salt-key-9283";
-const WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+const WINDOW_MS = 10 * 60 * 1000; // 10 minutes window
 const MAX_REQUESTS = 3; // Max 3 requests per 10 minutes
 
 /**
- * Hashes an IP address using SHA-256 and a secret salt.
- * Ensures the raw IP address is never stored or logged.
+ * Hashes an IP address using HMAC-SHA256 with a secret salt.
+ * Ensures raw IP addresses are never exposed or stored in plaintext.
  */
 export function hashIp(ip: string): string {
   return crypto
@@ -25,39 +23,43 @@ export function hashIp(ip: string): string {
 }
 
 /**
- * Checks if the hashed IP has exceeded the allowed rate limit.
+ * Checks if a given key (session ID or hashed IP) has exceeded the rate limit.
  * Returns { allowed: boolean, remaining: number, resetInSeconds: number }
  */
-export function checkRateLimit(hashedIp: string): {
+export function checkRateLimit(
+  key: string,
+  maxRequests: number = MAX_REQUESTS,
+  windowMs: number = WINDOW_MS
+): {
   allowed: boolean;
   remaining: number;
   resetInSeconds: number;
 } {
   const now = Date.now();
-  const record = rateLimitStore.get(hashedIp);
+  const record = rateLimitStore.get(key);
 
-  // Clean up expired entries periodically
+  // Clean up expired entries periodically (10% chance per call)
   if (Math.random() < 0.1) {
-    for (const [key, val] of rateLimitStore.entries()) {
+    for (const [k, val] of rateLimitStore.entries()) {
       if (now > val.resetAt) {
-        rateLimitStore.delete(key);
+        rateLimitStore.delete(k);
       }
     }
   }
 
   if (!record || now > record.resetAt) {
-    rateLimitStore.set(hashedIp, {
+    rateLimitStore.set(key, {
       count: 1,
-      resetAt: now + WINDOW_MS,
+      resetAt: now + windowMs,
     });
     return {
       allowed: true,
-      remaining: MAX_REQUESTS - 1,
-      resetInSeconds: Math.ceil(WINDOW_MS / 1000),
+      remaining: maxRequests - 1,
+      resetInSeconds: Math.ceil(windowMs / 1000),
     };
   }
 
-  if (record.count >= MAX_REQUESTS) {
+  if (record.count >= maxRequests) {
     const resetInSeconds = Math.max(1, Math.ceil((record.resetAt - now) / 1000));
     return {
       allowed: false,
@@ -70,7 +72,50 @@ export function checkRateLimit(hashedIp: string): {
   const resetInSeconds = Math.max(1, Math.ceil((record.resetAt - now) / 1000));
   return {
     allowed: true,
-    remaining: MAX_REQUESTS - record.count,
+    remaining: maxRequests - record.count,
     resetInSeconds,
+  };
+}
+
+/**
+ * Combined rate limiter checking both Session Token and Hashed Client IP.
+ * Prevents spamming even if cookies are cleared or proxies are rotated.
+ */
+export function checkSessionAndIpLimit(
+  sessionId: string,
+  hashedIp: string,
+  maxRequests: number = MAX_REQUESTS
+): {
+  allowed: boolean;
+  remaining: number;
+  resetInSeconds: number;
+  reason?: "session" | "ip";
+} {
+  // Check session rate limit
+  const sessionResult = checkRateLimit(`session:${sessionId}`, maxRequests);
+  if (!sessionResult.allowed) {
+    return {
+      allowed: false,
+      remaining: 0,
+      resetInSeconds: sessionResult.resetInSeconds,
+      reason: "session",
+    };
+  }
+
+  // Check IP rate limit
+  const ipResult = checkRateLimit(`ip:${hashedIp}`, maxRequests);
+  if (!ipResult.allowed) {
+    return {
+      allowed: false,
+      remaining: 0,
+      resetInSeconds: ipResult.resetInSeconds,
+      reason: "ip",
+    };
+  }
+
+  return {
+    allowed: true,
+    remaining: Math.min(sessionResult.remaining, ipResult.remaining),
+    resetInSeconds: Math.max(sessionResult.resetInSeconds, ipResult.resetInSeconds),
   };
 }

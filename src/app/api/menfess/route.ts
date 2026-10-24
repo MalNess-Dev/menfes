@@ -1,49 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
 import { prisma, ensureWalMode } from "@/lib/prisma";
-import { hashIp, checkRateLimit } from "@/lib/ratelimit";
+import { hashIp, checkSessionAndIpLimit } from "@/lib/ratelimit";
 import { splitMessageIntoSlides } from "@/lib/slides";
+import { getClientIp, parseDeviceType } from "@/lib/security";
 
 export async function POST(request: NextRequest) {
   try {
     await ensureWalMode();
 
-    // 1. Extract and Hash IP for Rate Limiting
-    const forwardedFor = request.headers.get("x-forwarded-for");
-    const realIp = request.headers.get("x-real-ip");
-    const rawIp = (forwardedFor ? forwardedFor.split(",")[0] : realIp) || "127.0.0.1";
-    const hashedIp = hashIp(rawIp);
+    // 1. Extract Real Client IP (Spoof-resistant)
+    const clientIp = getClientIp(request);
+    const userAgent = request.headers.get("user-agent") || "";
+    const deviceType = parseDeviceType(userAgent);
 
-    // 2. Check Rate Limit (3 messages / 10 minutes)
-    const rateLimit = checkRateLimit(hashedIp);
-    if (!rateLimit.allowed) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Terlalu banyak permintaan. Silakan coba lagi dalam ${Math.ceil(
-            rateLimit.resetInSeconds / 60
-          )} menit.`,
-        },
-        {
-          status: 429,
-          headers: {
-            "Retry-After": rateLimit.resetInSeconds.toString(),
-          },
-        }
-      );
+    // 2. Extract or Generate Anonymous Anti-Spam Session ID
+    let sessionId = request.cookies.get("menfess_session_id")?.value;
+    let isNewSession = false;
+    if (!sessionId || sessionId.length < 10) {
+      sessionId = crypto.randomUUID();
+      isNewSession = true;
     }
 
     // 3. Parse JSON Body
     const body = await request.json().catch(() => null);
     if (!body) {
       return NextResponse.json(
-        { success: false, error: "Permintaan tidak valid." },
+        { success: false, error: "Permintaan data tidak valid." },
         { status: 400 }
       );
     }
 
-    const { recipient, sender, message, turnstileToken } = body;
+    const { recipient, sender, message, turnstileToken, template } = body;
 
-    // 4. Validate Message
+    // 4. Validate Message Content
     if (!message || typeof message !== "string" || !message.trim()) {
       return NextResponse.json(
         { success: false, error: "Pesan menfess tidak boleh kosong." },
@@ -62,8 +52,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 5. Cloudflare Turnstile CAPTCHA Verification
-    const turnstileSecret = process.env.TURNSTILE_SECRET_KEY;
+    // 5. Anti-Spam Session & Hashed IP Rate Limiting (Free menfess, Max 3 per 10 mins)
+    const hashedIp = hashIp(clientIp);
+    const rateLimit = checkSessionAndIpLimit(sessionId, hashedIp, 3);
+
+    if (!rateLimit.allowed) {
+      const waitMinutes = Math.ceil(rateLimit.resetInSeconds / 60);
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Batas anti-spam tercapai (maksimal 3 pesan per 10 menit). Silakan tunggu sekitar ${waitMinutes} menit lagi sebelum mengirim pesan berikutnya.`,
+          remaining: 0,
+          resetInSeconds: rateLimit.resetInSeconds,
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": rateLimit.resetInSeconds.toString(),
+          },
+        }
+      );
+    }
+
+    // 6. Cloudflare Turnstile CAPTCHA Verification (Optional layer if configured in .env)
+    const turnstileSecret = process.env.TURNSTILE_SECRET_KEY?.trim();
     if (turnstileSecret) {
       if (!turnstileToken) {
         return NextResponse.json(
@@ -76,7 +88,7 @@ export async function POST(request: NextRequest) {
         const formData = new URLSearchParams();
         formData.append("secret", turnstileSecret);
         formData.append("response", turnstileToken);
-        formData.append("remoteip", rawIp);
+        formData.append("remoteip", clientIp);
 
         const verifyRes = await fetch(
           "https://challenges.cloudflare.com/turnstile/v0/siteverify",
@@ -102,26 +114,35 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 6. Calculate Estimated Slides
+    // 7. Calculate Slide Segmentation for Carousel (Max 5 slides)
     const slides = splitMessageIntoSlides(trimmedMessage);
-    const slideCount = Math.min(slides.length, 10);
+    const slideCount = Math.min(slides.length, 5);
 
-    // 7. Save to Database (Status: pending)
+    // 8. Save Menfess to SQLite Queue (Raw IP encrypted via HMAC-SHA256)
+    const selectedTemplate = ["comic", "unj-classic", "cyber", "scrapbook"].includes(template)
+      ? template
+      : "unj-classic";
+
     const newMenfess = await prisma.menfess.create({
       data: {
         recipient: recipient?.trim() || null,
-        sender: sender?.trim() || null,
+        sender: sender?.trim() || null, // Display alias on Instagram (e.g. Secret Admirer)
         message: trimmedMessage,
         status: "pending",
         slideCount,
+        senderIp: hashedIp, // Encrypted salted hash to protect sender privacy and owner data
+        senderDevice: `${deviceType} | template:${selectedTemplate}`,
+        senderUserAgent: userAgent.slice(0, 300),
       },
     });
 
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         success: true,
         id: newMenfess.id,
         slideCount,
+        remaining: rateLimit.remaining,
+        resetInSeconds: rateLimit.resetInSeconds,
         message: "Pesan menfess berhasil dikirim dan masuk antrean posting!",
         data: {
           id: newMenfess.id,
@@ -131,12 +152,25 @@ export async function POST(request: NextRequest) {
       },
       { status: 201 }
     );
+
+    // 9. Persist Session Cookie for Rate Limiting
+    if (isNewSession || !request.cookies.get("menfess_session_id")) {
+      response.cookies.set("menfess_session_id", sessionId, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: 30 * 24 * 60 * 60, // 30 days
+      });
+    }
+
+    return response;
   } catch (error) {
     console.error("Error creating menfess:", error);
     return NextResponse.json(
       {
         success: false,
-        error: "Terjadi kesalahan internal saat menyimpan pesan.",
+        error: "Terjadi kesalahan internal saat memproses pesan.",
       },
       { status: 500 }
     );

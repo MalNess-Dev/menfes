@@ -1,4 +1,9 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+import path from "path";
+
+// Load .env.local first, then fallback to .env
+dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
+dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 import { prisma } from "../lib/prisma";
 import {
   recoverHangingJobs,
@@ -25,6 +30,18 @@ async function runWorker() {
   console.log("==================================================================");
   console.log("🚀 Simple IG Menfess Worker Started");
   console.log("==================================================================");
+
+  const igUser = process.env.IG_USERNAME?.trim() || "";
+  const igPass = process.env.IG_PASSWORD?.trim() || "";
+  const igSid = process.env.IG_SESSIONID?.trim() || "";
+  const isMock = process.env.IG_DEV_MOCK === "true";
+
+  console.log("📋 Pengecekan Kredensial Instagram (.env / .env.local):");
+  console.log(`   • IG_USERNAME  : ${igUser ? "@" + igUser : "(KOSONG - Belum Disimpan / Belum Diisi)"}`);
+  console.log(`   • IG_PASSWORD  : ${igPass ? "****** (" + igPass.length + " karakter)" : "(KOSONG - Belum Disimpan / Belum Diisi)"}`);
+  console.log(`   • IG_SESSIONID : ${igSid ? igSid.slice(0, 10) + "..." : "(KOSONG - Opsional)"}`);
+  console.log(`   • IG_DEV_MOCK  : ${isMock ? "AKTIF (Mode Simulasi)" : "TIDAK AKTIF"}`);
+  console.log("------------------------------------------------------------------");
 
   // 1. Recover any jobs stuck in 'processing' from a previous crash/restart
   try {
@@ -75,6 +92,20 @@ async function runWorker() {
       console.error("[Worker] Error checking daily post count:", err);
     }
 
+    // Check if Instagram credentials exist before picking jobs
+    const hasCreds =
+      Boolean(process.env.IG_SESSIONID?.trim()) ||
+      Boolean(process.env.IG_USERNAME?.trim() && process.env.IG_PASSWORD?.trim()) ||
+      process.env.IG_DEV_MOCK === "true";
+
+    if (!hasCreds) {
+      console.log(
+        "[Worker] ⚠️ Kredensial Instagram belum diisi di file .env (isi IG_USERNAME & IG_PASSWORD atau IG_SESSIONID). Antrean ditahan aman tanpa gagal. Menunggu 30 detik..."
+      );
+      await sleep(30000);
+      continue;
+    }
+
     // Fetch next pending job
     let job;
     try {
@@ -109,11 +140,19 @@ async function runWorker() {
     let haltMessage = "";
 
     try {
-      // 1. Generate JPEG buffers for slides
-      console.log(`[Worker] Membuat gambar template untuk Menfess #${job.id}...`);
-      const slideBuffers = await renderAllSlides(job.recipient, job.sender, job.message);
+      // 1. Generate JPEG buffers for slides according to chosen template
+      let templateStyle: "comic" | "unj-classic" | "cyber" | "scrapbook" = "comic";
+      if (job.senderDevice && job.senderDevice.includes("template:")) {
+        const parsed = job.senderDevice.split("template:")[1]?.trim();
+        if (parsed && ["comic", "unj-classic", "cyber", "scrapbook"].includes(parsed)) {
+          templateStyle = parsed as "comic" | "unj-classic" | "cyber" | "scrapbook";
+        }
+      }
+
+      console.log(`[Worker] Membuat gambar template (${templateStyle}) untuk Menfess #${job.id}...`);
+      const slideBuffers = await renderAllSlides(job.recipient, job.sender, job.message, templateStyle);
       const totalSlides = slideBuffers.length;
-      console.log(`[Worker] Berhasil merender ${totalSlides} slide untuk Menfess #${job.id}.`);
+      console.log(`[Worker] Berhasil merender ${totalSlides} slide (${templateStyle}) untuk Menfess #${job.id}.`);
 
       // 2. Build caption
       const caption = buildCaption(job.recipient, job.sender, job.id);

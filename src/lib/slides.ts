@@ -1,9 +1,10 @@
-export const CHARS_PER_SLIDE = 450;
-export const MAX_SLIDES = 10;
+export const CHARS_PER_SLIDE = 350;
+export const MAX_SLIDES = 5;
 
 /**
  * Splits message text into slides without breaking words.
- * Honors paragraphs, sentences, and words.
+ * Supports explicit slide separators (---slide--- or \n---\n) or auto-splits by character count.
+ * Honors paragraphs, sentences, and words. Capped at max 5 slides.
  */
 export function splitMessageIntoSlides(
   message: string,
@@ -13,6 +14,22 @@ export function splitMessageIntoSlides(
   const cleanMessage = message.trim();
   if (!cleanMessage) return [""];
 
+  // 1. Explicit multi-slide separator (e.g. ---slide--- or \n---\n)
+  if (cleanMessage.includes("---slide---") || /\n\s*---\s*\n/.test(cleanMessage)) {
+    const rawSegments = cleanMessage.includes("---slide---")
+      ? cleanMessage.split(/---slide---/)
+      : cleanMessage.split(/\n\s*---\s*\n/);
+
+    const segments = rawSegments
+      .map((seg) => seg.trim())
+      .filter((seg) => seg.length > 0);
+
+    if (segments.length > 0) {
+      return segments.slice(0, maxSlides);
+    }
+  }
+
+  // 2. Auto-split if length exceeds charsPerSlide
   if (cleanMessage.length <= charsPerSlide) {
     return [cleanMessage];
   }

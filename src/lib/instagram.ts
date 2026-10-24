@@ -3,6 +3,7 @@ import {
   IgCheckpointError,
   IgLoginRequiredError,
 } from "instagram-private-api";
+import { prisma } from "./prisma";
 
 export { IgCheckpointError, IgLoginRequiredError };
 
@@ -13,6 +14,74 @@ interface WebUploadResult {
     code: string;
   };
   message?: string;
+}
+
+let cachedIgClient: IgApiClient | null = null;
+
+/**
+ * Returns an authenticated IgApiClient using IG_USERNAME and IG_PASSWORD
+ */
+async function getAuthenticatedClient(): Promise<IgApiClient> {
+  if (cachedIgClient) {
+    return cachedIgClient;
+  }
+
+  const username = process.env.IG_USERNAME?.trim();
+  const password = process.env.IG_PASSWORD?.trim();
+
+  if (!username || !password) {
+    throw new Error(
+      "Kredensial Instagram tidak ditemukan. Harap isi IG_USERNAME & IG_PASSWORD atau IG_SESSIONID di file .env."
+    );
+  }
+
+  const ig = new IgApiClient();
+  ig.state.generateDevice(username);
+
+  // 1. Try restoring existing session from database
+  try {
+    const savedSession = await prisma.igSession.findUnique({ where: { id: 1 } });
+    if (savedSession?.sessionData) {
+      await ig.state.deserialize(JSON.parse(savedSession.sessionData));
+      // Test if session is still valid
+      await ig.user.info(ig.state.cookieUserId);
+      console.log("[Instagram API] Berhasil memulihkan sesi tersimpan untuk @" + username);
+      cachedIgClient = ig;
+      return ig;
+    }
+  } catch {
+    console.log("[Instagram API] Sesi tersimpan kadaluarsa atau tidak valid. Melakukan login baru...");
+  }
+
+  // 2. Perform fresh login
+  console.log(`[Instagram API] Melakukan login ke akun Instagram: @${username}...`);
+  try {
+    await ig.account.login(username, password);
+    console.log(`[Instagram API] Login berhasil sebagai @${username}`);
+
+    // 3. Save new session to database
+    const serialized = await ig.state.serialize();
+    delete (serialized as Record<string, unknown>).constants;
+    await prisma.igSession.upsert({
+      where: { id: 1 },
+      update: { sessionData: JSON.stringify(serialized) },
+      create: { id: 1, sessionData: JSON.stringify(serialized) },
+    });
+
+    cachedIgClient = ig;
+    return ig;
+  } catch (err: unknown) {
+    const error = err as Error;
+    if (
+      error.message?.includes("checkpoint_required") ||
+      (error as unknown as Record<string, unknown>).name === "IgCheckpointError"
+    ) {
+      const checkpointErr = new Error("Akun Instagram terkena checkpoint / verifikasi keamanan.");
+      checkpointErr.name = "IgCheckpointError";
+      throw checkpointErr;
+    }
+    throw error;
+  }
 }
 
 /**
@@ -90,7 +159,7 @@ async function uploadPhotoToWeb(
       "X-ASBD-ID": "129477",
       Referer: "https://www.instagram.com/",
     },
-    body: buffer,
+    body: new Uint8Array(buffer),
   });
 
   const data = (await res.json()) as { status: string };
@@ -102,55 +171,71 @@ async function uploadPhotoToWeb(
 }
 
 /**
- * Publishes a single image to Instagram using Web endpoints
+ * Publishes a single image to Instagram
  */
 export async function publishImage(buffer: Buffer, caption: string): Promise<string> {
-  const auth = await getWebAuthContext();
-
-  // 1. Upload photo bytes
-  const { uploadId } = await uploadPhotoToWeb(buffer, auth, false);
-
-  // 2. Configure media
-  const form = new URLSearchParams();
-  form.append("upload_id", uploadId);
-  form.append("caption", caption);
-  form.append("source_type", "4");
-
-  const configRes = await fetch("https://www.instagram.com/api/v1/media/configure/", {
-    method: "POST",
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      Cookie: auth.cookieHeader,
-      "X-CSRFToken": auth.csrfToken,
-      "X-IG-App-ID": "936619743392459",
-      "X-ASBD-ID": "129477",
-      "X-Requested-With": "XMLHttpRequest",
-      Referer: "https://www.instagram.com/",
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: form.toString(),
-  });
-
-  const configData = (await configRes.json()) as WebUploadResult;
-
-  if (configData.status !== "ok" || !configData.media) {
-    if (configData.message?.includes("checkpoint_required")) {
-      const checkpointErr = new IgCheckpointError();
-      checkpointErr.message = "Instagram checkpoint_required terdeteksi.";
-      throw checkpointErr;
-    }
-    if (configData.message?.includes("login_required")) {
-      const loginErr = new IgLoginRequiredError();
-      loginErr.message = "Instagram session expired (login_required).";
-      throw loginErr;
-    }
-    throw new Error(`Konfigurasi media gagal: ${configData.message || JSON.stringify(configData)}`);
+  // 1. Mock simulation mode if enabled in .env
+  if (process.env.IG_DEV_MOCK === "true") {
+    console.log("[Instagram MOCK] Mode simulasi aktif. Menfess berhasil disimulasikan.");
+    return `mock_media_${Date.now()}`;
   }
 
-  const postCode = configData.media.code ? ` (https://www.instagram.com/p/${configData.media.code}/)` : "";
-  console.log(`[Instagram] Berhasil memposting ke feed: ${configData.media.id}${postCode}`);
-  return configData.media.id;
+  // 2. If IG_SESSIONID is provided, use Web endpoints
+  if (process.env.IG_SESSIONID?.trim()) {
+    const auth = await getWebAuthContext();
+    const { uploadId } = await uploadPhotoToWeb(buffer, auth, false);
+
+    const form = new URLSearchParams();
+    form.append("upload_id", uploadId);
+    form.append("caption", caption);
+    form.append("source_type", "4");
+
+    const configRes = await fetch("https://www.instagram.com/api/v1/media/configure/", {
+      method: "POST",
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Cookie: auth.cookieHeader,
+        "X-CSRFToken": auth.csrfToken,
+        "X-IG-App-ID": "936619743392459",
+        "X-ASBD-ID": "129477",
+        "X-Requested-With": "XMLHttpRequest",
+        Referer: "https://www.instagram.com/",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: form.toString(),
+    });
+
+    const configData = (await configRes.json()) as WebUploadResult;
+
+    if (configData.status !== "ok" || !configData.media) {
+      if (configData.message?.includes("checkpoint_required")) {
+        const checkpointErr = new Error("Instagram checkpoint_required terdeteksi.");
+        checkpointErr.name = "IgCheckpointError";
+        throw checkpointErr;
+      }
+      if (configData.message?.includes("login_required")) {
+        const loginErr = new Error("Instagram session expired (login_required).");
+        loginErr.name = "IgLoginRequiredError";
+        throw loginErr;
+      }
+      throw new Error(`Konfigurasi media gagal: ${configData.message || JSON.stringify(configData)}`);
+    }
+
+    const postCode = configData.media.code ? ` (https://www.instagram.com/p/${configData.media.code}/)` : "";
+    console.log(`[Instagram Web] Berhasil memposting ke feed: ${configData.media.id}${postCode}`);
+    return configData.media.id;
+  }
+
+  // 3. Fallback: Use IgApiClient with IG_USERNAME & IG_PASSWORD
+  const ig = await getAuthenticatedClient();
+  const publishResult = await ig.publish.photo({
+    file: buffer,
+    caption,
+  });
+
+  console.log(`[Instagram App API] Berhasil memposting foto tunggal: ${publishResult.media.id}`);
+  return publishResult.media.id;
 }
 
 /**
@@ -161,52 +246,69 @@ export async function publishAlbum(buffers: Buffer[], caption: string): Promise<
     return publishImage(buffers[0], caption);
   }
 
-  const auth = await getWebAuthContext();
-  const sidecarUploadId = Date.now().toString();
-  const childrenMetadata: Array<{ upload_id: string; source_type: string }> = [];
-
-  // 1. Upload each child slide
-  for (let i = 0; i < buffers.length; i++) {
-    const { uploadId } = await uploadPhotoToWeb(buffers[i], auth, true);
-    childrenMetadata.push({
-      upload_id: uploadId,
-      source_type: "4",
-    });
+  // 1. Mock simulation mode if enabled in .env
+  if (process.env.IG_DEV_MOCK === "true") {
+    console.log(`[Instagram MOCK] Mode simulasi aktif. Album (${buffers.length} slide) berhasil disimulasikan.`);
+    return `mock_album_${Date.now()}`;
   }
 
-  // 2. Configure sidecar
-  const form = new URLSearchParams();
-  form.append("client_sidecar_id", sidecarUploadId);
-  form.append("upload_id", sidecarUploadId);
-  form.append("caption", caption);
-  form.append("children_metadata", JSON.stringify(childrenMetadata));
-  form.append("source_type", "4");
+  // 2. If IG_SESSIONID is provided, use Web endpoints
+  if (process.env.IG_SESSIONID?.trim()) {
+    const auth = await getWebAuthContext();
+    const sidecarUploadId = Date.now().toString();
+    const childrenMetadata: Array<{ upload_id: string; source_type: string }> = [];
 
-  const configRes = await fetch("https://www.instagram.com/api/v1/media/configure_sidecar/", {
-    method: "POST",
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      Cookie: auth.cookieHeader,
-      "X-CSRFToken": auth.csrfToken,
-      "X-IG-App-ID": "936619743392459",
-      "X-ASBD-ID": "129477",
-      "X-Requested-With": "XMLHttpRequest",
-      Referer: "https://www.instagram.com/",
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: form.toString(),
+    for (let i = 0; i < buffers.length; i++) {
+      const { uploadId } = await uploadPhotoToWeb(buffers[i], auth, true);
+      childrenMetadata.push({
+        upload_id: uploadId,
+        source_type: "4",
+      });
+    }
+
+    const form = new URLSearchParams();
+    form.append("client_sidecar_id", sidecarUploadId);
+    form.append("upload_id", sidecarUploadId);
+    form.append("caption", caption);
+    form.append("children_metadata", JSON.stringify(childrenMetadata));
+    form.append("source_type", "4");
+
+    const configRes = await fetch("https://www.instagram.com/api/v1/media/configure_sidecar/", {
+      method: "POST",
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Cookie: auth.cookieHeader,
+        "X-CSRFToken": auth.csrfToken,
+        "X-IG-App-ID": "936619743392459",
+        "X-ASBD-ID": "129477",
+        "X-Requested-With": "XMLHttpRequest",
+        Referer: "https://www.instagram.com/",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: form.toString(),
+    });
+
+    const configData = (await configRes.json()) as WebUploadResult;
+
+    if (configData.status === "ok" && configData.media) {
+      console.log(`[Instagram Web] Berhasil memposting carousel: ${configData.media.id}`);
+      return configData.media.id;
+    }
+
+    console.warn("[Instagram] Sidecar web configure gagal, mencoba foto tunggal...");
+    return publishImage(buffers[0], caption);
+  }
+
+  // 3. Fallback: Use IgApiClient with IG_USERNAME & IG_PASSWORD
+  const ig = await getAuthenticatedClient();
+  const albumResult = await ig.publish.album({
+    items: buffers.map((b) => ({ file: b })),
+    caption,
   });
 
-  const configData = (await configRes.json()) as WebUploadResult;
-
-  if (configData.status === "ok" && configData.media) {
-    return configData.media.id;
-  }
-
-  // Fallback: If web sidecar API fails, publish first slide with full message caption so the menfess is not lost
-  console.warn("[Instagram] Sidecar web configure tidak berhasil, memposting slide utama sebagai foto tunggal...");
-  return publishImage(buffers[0], caption);
+  console.log(`[Instagram App API] Berhasil memposting carousel (${buffers.length} slide): ${albumResult.media.id}`);
+  return albumResult.media.id;
 }
 
 /**
@@ -227,11 +329,11 @@ export function buildCaption(
   }
 
   lines.push("");
-  lines.push("Pesan dikirim secara anonim melalui Simple IG Menfess.");
+  lines.push("Pesan dikirim secara anonim melalui UNJ Menfess.");
   if (menfessId) {
-    lines.push(`#menfess #${menfessId}`);
+    lines.push(`#menfessunj #unjmenfess #${menfessId}`);
   } else {
-    lines.push("#menfess");
+    lines.push("#menfessunj #unjmenfess");
   }
 
   return lines.join("\n").trim();
