@@ -75,14 +75,28 @@ async function getWebAuthContext(): Promise<{ cookieHeader: string; csrfToken: s
   const userId = sid.split("%3A")[0].split(":")[0];
 
   // Fetch homepage WITH sessionid so Instagram returns CSRF token for the authenticated session.
-  // Without this, you get an anonymous CSRF token which causes HTTP 500 on sidecar configure.
+  // redirect: "manual" prevents infinite 302 redirect loop (TypeError: fetch failed) when session is expired.
   const homeRes = await fetch("https://www.instagram.com/", {
+    redirect: "manual",
     headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       Cookie: `sessionid=${sid}; ds_user_id=${userId}`,
     },
   });
+
   const cookies = homeRes.headers.getSetCookie();
+  const isDeleted = cookies.some((c) => c.includes("sessionid=deleted"));
+  const location = homeRes.headers.get("location") || "";
+
+  if (isDeleted || location.includes("accounts/login") || location.includes("challenge")) {
+    const loginErr = new Error(
+      "IG_SESSIONID di file .env sudah kadaluarsa (Instagram menghapus cookie: sessionid=deleted). Silakan buka https://www.instagram.com di browser, login kembali, salin nilai cookie sessionid yang baru, lalu masukkan ke file .env."
+    );
+    loginErr.name = "IgLoginRequiredError";
+    throw loginErr;
+  }
+
   const csrf = cookies.find((c) => c.startsWith("csrftoken="))?.split(";")[0]?.split("=")[1] || "";
 
   // If IG didn't rotate the CSRF via Set-Cookie, parse it from the page's meta tag
@@ -442,7 +456,7 @@ export async function publishStory(
       );
     }
 
-    const configRes = await fetch("https://www.instagram.com/api/v1/media/configure_to_story/", {
+    let configRes = await fetch("https://www.instagram.com/api/v1/media/configure_to_story/", {
       method: "POST",
       headers: {
         "User-Agent":
@@ -458,7 +472,35 @@ export async function publishStory(
       body: form.toString(),
     });
 
-    const configData = (await configRes.json()) as WebUploadResult;
+    let configData = (await configRes.json()) as WebUploadResult;
+
+    // Fallback: If configure with stickers was rejected, retry cleanly with just the story image
+    if ((configData.status !== "ok" || !configData.media) && (cleanMediaId || postUrl)) {
+      console.warn("[Instagram Web] Mencoba ulang upload story tanpa stiker metadata...");
+      const simpleForm = new URLSearchParams();
+      simpleForm.append("upload_id", uploadId);
+      simpleForm.append("source_type", "3");
+      simpleForm.append("configure_mode", "1");
+      simpleForm.append("client_shared_at", Date.now().toString());
+
+      configRes = await fetch("https://www.instagram.com/api/v1/media/configure_to_story/", {
+        method: "POST",
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          Cookie: auth.cookieHeader,
+          "X-CSRFToken": auth.csrfToken,
+          "X-IG-App-ID": "936619743392459",
+          "X-ASBD-ID": "129477",
+          "X-Requested-With": "XMLHttpRequest",
+          Referer: "https://www.instagram.com/",
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: simpleForm.toString(),
+      });
+      configData = (await configRes.json()) as WebUploadResult;
+    }
+
     if (configData.status !== "ok" || !configData.media) {
       if (configData.message?.includes("checkpoint_required")) {
         const checkpointErr = new Error("Instagram checkpoint_required terdeteksi.");

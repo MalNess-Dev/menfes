@@ -104,9 +104,24 @@ export default function MenfessPage() {
 
   const [mascotMood, setMascotMood] = useState<"idle" | "typing" | "happy" | "submitting">("idle");
 
+  interface QueueInfo {
+    todayPublishedCount: number;
+    maxDailyPosts: number;
+    remainingToday: number;
+    isDailyLimitReached: boolean;
+    pendingCount: number;
+  }
+
+  const [queueInfo, setQueueInfo] = useState<QueueInfo | null>(null);
+
   const [successData, setSuccessData] = useState<{
     id: number;
     slideCount: number;
+    queuePosition?: number;
+    pendingAhead?: number;
+    isDailyLimitReached?: boolean;
+    todayPublishedCount?: number;
+    maxDailyPosts?: number;
     remaining?: number;
     resetInSeconds?: number;
     template: TemplateType;
@@ -116,6 +131,25 @@ export default function MenfessPage() {
   const turnstileContainerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
+
+  // Fetch current queue and daily limit info on mount
+  const fetchQueueInfo = async () => {
+    try {
+      const res = await fetch("/api/menfess");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setQueueInfo(data);
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  };
+
+  useEffect(() => {
+    fetchQueueInfo();
+  }, []);
 
   // Auto-split message into clean slides strictly <= 350 characters
   const slides = useMemo(() => {
@@ -233,10 +267,18 @@ export default function MenfessPage() {
       setSuccessData({
         id: createdId,
         slideCount: createdSlideCount,
+        queuePosition: data.queuePosition ?? data.data?.queuePosition,
+        pendingAhead: data.pendingAhead ?? data.data?.pendingAhead,
+        isDailyLimitReached: data.isDailyLimitReached ?? data.data?.isDailyLimitReached,
+        todayPublishedCount: data.todayPublishedCount ?? data.data?.todayPublishedCount,
+        maxDailyPosts: data.maxDailyPosts ?? data.data?.maxDailyPosts ?? 15,
         remaining: data.remaining,
         resetInSeconds: data.resetInSeconds,
         template: selectedTemplate,
       });
+
+      // Refresh queue counts
+      fetchQueueInfo();
 
       // Reset form on success
       setMessage("");
@@ -551,17 +593,72 @@ export default function MenfessPage() {
               </div>
             </div>
 
+            {/* Daily Limit Notice Banner (When 15/15 posts reached) */}
+            {queueInfo?.isDailyLimitReached && (
+              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200/90 flex items-start gap-3 text-amber-900 text-xs animate-in fade-in">
+                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-extrabold text-amber-950 text-xs sm:text-sm">
+                    Kuota Upload Harian Instagram Telah Mencapai Batas ({queueInfo.todayPublishedCount}/{queueInfo.maxDailyPosts} Postingan)
+                  </p>
+                  <p className="text-amber-800 text-[11px] sm:text-xs leading-relaxed">
+                    Batas aman 15 postingan/hari untuk akun Instagram telah tercapai hari ini. <b>Pesan baru tetap diterima dan masuk antrean</b> untuk otomatis diunggah besok sesuai urutan (dari yang terlama ke yang terbaru).
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Success Box */}
             {successData && (
-              <div className="p-4 rounded-2xl bg-[#E6F4F1] border border-[#006569]/40 flex items-start gap-3 text-xs text-[#006569] animate-in fade-in">
-                <CheckCircle2 className="w-5 h-5 text-[#006569] shrink-0 mt-0.5" />
-                <div className="flex-1 space-y-1">
-                  <p className="font-bold text-sm text-slate-900">
-                    Menfess Berhasil Masuk Antrean UNJ! (#{successData.id})
-                  </p>
-                  <p className="text-slate-600 leading-relaxed text-xs">
-                    Pesanmu sedang diproses untuk diposting sebagai <b>{successData.slideCount} slide carousel</b> dengan template <b>{(successData.template || selectedTemplate).toUpperCase()}</b>.
-                  </p>
+              <div className="p-5 rounded-2xl bg-[#E6F4F1] border-2 border-[#006569]/40 flex items-start gap-3.5 text-xs text-[#006569] animate-in fade-in shadow-sm">
+                <CheckCircle2 className="w-6 h-6 text-[#006569] shrink-0 mt-0.5" />
+                <div className="flex-1 space-y-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-black text-sm sm:text-base text-slate-900">
+                      Menfess Berhasil Masuk Antrean UNJ! (#{successData.id})
+                    </p>
+                    {typeof successData.queuePosition === "number" && (
+                      <span className="bg-[#006569] text-[#FFDD00] font-black text-xs px-3 py-1 rounded-full shadow-sm">
+                        Antrean ke-#{successData.queuePosition}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Queue Position Card */}
+                  <div className="bg-white/90 rounded-xl p-3 border border-[#006569]/20 space-y-1">
+                    <p className="font-extrabold text-xs text-[#006569] flex items-center gap-1.5">
+                      <span>🏷️</span>
+                      <span>
+                        Posisi Antrean: <b>Antrean ke-{successData.queuePosition ?? 1}</b>
+                        {typeof successData.pendingAhead === "number" && (
+                          <span className="font-normal text-slate-600">
+                            {" "}(ada {successData.pendingAhead} pesan lain di depanmu)
+                          </span>
+                        )}
+                      </span>
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      Urutan posting diproses secara berurutan: <b>dari pesan yang terlama ke yang terbaru (FIFO)</b>.
+                    </p>
+                  </div>
+
+                  {/* Daily Limit Info */}
+                  {successData.isDailyLimitReached ? (
+                    <div className="bg-amber-50 rounded-xl p-3 border border-amber-300 text-amber-900 space-y-1">
+                      <p className="font-bold text-xs text-amber-950 flex items-center gap-1.5">
+                        <span>⚠️</span>
+                        <span>Kuota Upload Instagram Hari Ini Penuh ({successData.todayPublishedCount ?? 15}/{successData.maxDailyPosts ?? 15})</span>
+                      </p>
+                      <p className="text-[11px] text-amber-800 leading-relaxed">
+                        Pesanmu tetap <b>aman tersimpan di antrean</b> dan akan otomatis diunggah ke Instagram besok hari saat kuota harian dimulai kembali.
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-slate-600 leading-relaxed text-xs">
+                      Pesanmu akan diposting sebagai <b>{successData.slideCount} slide carousel</b> dengan template <b>{(successData.template || selectedTemplate).toUpperCase()}</b>.
+                    </p>
+                  )}
+
                   {typeof successData.remaining === "number" && (
                     <p className="font-mono text-[11px] font-bold text-[#006569]">
                       Sisa Kuota Sesi Anda: {successData.remaining} pesan lagi (Reset 10 menit)

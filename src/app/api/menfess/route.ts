@@ -5,6 +5,23 @@ import { menfess } from "@/lib/schema";
 import { hashIp, checkSessionAndIpLimit } from "@/lib/ratelimit";
 import { splitMessageIntoSlides } from "@/lib/slides";
 import { getClientIp, parseDeviceType } from "@/lib/security";
+import { getQueuePosition, getQueueInfo } from "@/lib/queue";
+
+export async function GET() {
+  try {
+    const queueInfo = await getQueueInfo();
+    return NextResponse.json({
+      success: true,
+      ...queueInfo,
+    });
+  } catch (error) {
+    console.error("Error fetching queue info:", error);
+    return NextResponse.json(
+      { success: false, error: "Gagal mengambil data antrean." },
+      { status: 500 }
+    );
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -140,6 +157,10 @@ export async function POST(request: NextRequest) {
       throw new Error("Menfess tidak dapat disimpan ke database.");
     }
 
+    // 9. Calculate Queue Position & Daily Limit Status (FIFO: oldest to newest)
+    const queuePosition = await getQueuePosition(newMenfess.id);
+    const queueInfo = await getQueueInfo();
+
     const response = NextResponse.json(
       {
         success: true,
@@ -147,17 +168,29 @@ export async function POST(request: NextRequest) {
         slideCount,
         remaining: rateLimit.remaining,
         resetInSeconds: rateLimit.resetInSeconds,
-        message: "Pesan menfess berhasil dikirim dan masuk antrean posting!",
+        queuePosition,
+        pendingAhead: Math.max(0, queuePosition - 1),
+        isDailyLimitReached: queueInfo.isDailyLimitReached,
+        todayPublishedCount: queueInfo.todayPublishedCount,
+        maxDailyPosts: queueInfo.maxDailyPosts,
+        message: queueInfo.isDailyLimitReached
+          ? `Pesan berhasil dikirim dan masuk antrean ke-${queuePosition}! Kuota postingan harian Instagram hari ini telah mencapai batas (${queueInfo.todayPublishedCount}/${queueInfo.maxDailyPosts}). Pesanmu tetap aman dalam antrean dan akan otomatis diunggah besok sesuai urutan.`
+          : `Pesan menfess berhasil dikirim dan berada di antrean ke-${queuePosition}!`,
         data: {
           id: newMenfess.id,
           slideCount,
+          queuePosition,
+          pendingAhead: Math.max(0, queuePosition - 1),
+          isDailyLimitReached: queueInfo.isDailyLimitReached,
+          todayPublishedCount: queueInfo.todayPublishedCount,
+          maxDailyPosts: queueInfo.maxDailyPosts,
           createdAt: newMenfess.createdAt,
         },
       },
       { status: 201 }
     );
 
-    // 9. Persist Session Cookie for Rate Limiting
+    // 10. Persist Session Cookie for Rate Limiting
     if (isNewSession || !request.cookies.get("menfess_session_id")) {
       response.cookies.set("menfess_session_id", sessionId, {
         httpOnly: true,

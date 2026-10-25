@@ -7,8 +7,21 @@ dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 import { db, closeDatabase } from "../src/lib/db";
 import { menfess } from "../src/lib/schema";
+import { getBotStatus, clearBotHalted } from "../src/lib/queue";
 
 async function main() {
+  const args = process.argv.slice(2);
+  const command = args[0]?.toLowerCase();
+
+  if (command === "resume") {
+    await clearBotHalted();
+    console.log("\n=======================================================");
+    console.log("✅ [BOT RESUMED] Status bot berhasil diaktifkan kembali!");
+    console.log("Worker akan segera melanjutkan pemrosesan antrean.");
+    console.log("=======================================================\n");
+    return;
+  }
+
   const counts = await db
     .select({ status: menfess.status, total: count() })
     .from(menfess)
@@ -22,6 +35,8 @@ async function main() {
   const failed = byStatus.get("failed") ?? 0;
   const rejected = byStatus.get("rejected") ?? 0;
 
+  const botStatus = await getBotStatus();
+
   console.log("\n=======================================================");
   console.log("📨 Status Antrean IG Menfess");
   console.log("=======================================================");
@@ -30,6 +45,15 @@ async function main() {
   console.log(`✅ Berhasil Diposting:           ${published}`);
   console.log(`⚠️  Gagal / Retry:                ${failed}`);
   console.log(`❌ Ditolak:                      ${rejected}`);
+  console.log("-------------------------------------------------------");
+  if (botStatus?.isHalted) {
+    console.log(`🛑 Status Worker:                BERHENTI (HALTED)`);
+    console.log(`   Alasan:                       ${botStatus.haltReason || "Tidak diketahui"}`);
+    console.log(`   Waktu Berhenti:               ${botStatus.haltedAt || "-"}`);
+    console.log(`   👉 Untuk melanjutkan ketik:   npm run admin resume`);
+  } else {
+    console.log(`🟢 Status Worker:                NORMAL / BERJALAN`);
+  }
   console.log("=======================================================\n");
 }
 
