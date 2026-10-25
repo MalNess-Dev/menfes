@@ -379,6 +379,27 @@ export function buildCaption(
 }
 
 /**
+ * Converts a numeric Instagram media ID into a standard shortcode (e.g. De6ta_zmVs0)
+ */
+export function numericIdToShortcode(numericId: string): string {
+  try {
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    let shortcode = "";
+    let n = BigInt(numericId.split("_")[0]);
+    const zero = BigInt(0);
+    const sixtyFour = BigInt(64);
+    while (n > zero) {
+      const rem = Number(n % sixtyFour);
+      n = n / sixtyFour;
+      shortcode = alphabet[rem] + shortcode;
+    }
+    return shortcode;
+  } catch {
+    return "";
+  }
+}
+
+/**
  * Publishes a 1080x1920 vertical image to Instagram Story (SG).
  * Connects the Story directly to the Feed post so tapping opens the original post.
  */
@@ -401,11 +422,8 @@ export async function publishStory(
 
   // Instagram requires numeric media_id (strip _userId suffix if present)
   const cleanMediaId = feedMediaId ? feedMediaId.split("_")[0] : undefined;
-  const postUrl = postCode
-    ? `https://www.instagram.com/p/${postCode}/`
-    : cleanMediaId
-    ? `https://www.instagram.com/p/${cleanMediaId}/`
-    : undefined;
+  const shortcode = postCode || (cleanMediaId ? numericIdToShortcode(cleanMediaId) : undefined);
+  const postUrl = shortcode ? `https://www.instagram.com/p/${shortcode}/` : undefined;
 
   // 1. Web session path
   if (process.env.IG_SESSIONID?.trim()) {
@@ -474,31 +492,36 @@ export async function publishStory(
 
     let configData = (await configRes.json()) as WebUploadResult;
 
-    // Fallback: If configure with stickers was rejected, retry cleanly with just the story image
+    // Fallback: If configure with stickers was rejected, re-upload fresh photo buffer and configure cleanly
     if ((configData.status !== "ok" || !configData.media) && (cleanMediaId || postUrl)) {
-      console.warn("[Instagram Web] Mencoba ulang upload story tanpa stiker metadata...");
-      const simpleForm = new URLSearchParams();
-      simpleForm.append("upload_id", uploadId);
-      simpleForm.append("source_type", "3");
-      simpleForm.append("configure_mode", "1");
-      simpleForm.append("client_shared_at", Date.now().toString());
+      console.warn("[Instagram Web] Konfigurasi stiker ditolak. Mengunggah ulang story tanpa stiker metadata...");
+      try {
+        const { uploadId: retryUploadId } = await uploadPhotoToWeb(buffer, auth, false);
+        const simpleForm = new URLSearchParams();
+        simpleForm.append("upload_id", retryUploadId);
+        simpleForm.append("source_type", "3");
+        simpleForm.append("configure_mode", "1");
+        simpleForm.append("client_shared_at", Date.now().toString());
 
-      configRes = await fetch("https://www.instagram.com/api/v1/media/configure_to_story/", {
-        method: "POST",
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          Cookie: auth.cookieHeader,
-          "X-CSRFToken": auth.csrfToken,
-          "X-IG-App-ID": "936619743392459",
-          "X-ASBD-ID": "129477",
-          "X-Requested-With": "XMLHttpRequest",
-          Referer: "https://www.instagram.com/",
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: simpleForm.toString(),
-      });
-      configData = (await configRes.json()) as WebUploadResult;
+        configRes = await fetch("https://www.instagram.com/api/v1/media/configure_to_story/", {
+          method: "POST",
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            Cookie: auth.cookieHeader,
+            "X-CSRFToken": auth.csrfToken,
+            "X-IG-App-ID": "936619743392459",
+            "X-ASBD-ID": "129477",
+            "X-Requested-With": "XMLHttpRequest",
+            Referer: "https://www.instagram.com/",
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: simpleForm.toString(),
+        });
+        configData = (await configRes.json()) as WebUploadResult;
+      } catch (retryErr) {
+        console.warn("[Instagram Web] Percobaan fallback upload story gagal:", retryErr);
+      }
     }
 
     if (configData.status !== "ok" || !configData.media) {

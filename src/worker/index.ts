@@ -228,23 +228,46 @@ async function runWorker() {
       // 5. Otomatis upload ke Instagram Story (SG) berformat reshare postingan yang langsung terhubung ke postingan
       const autoStory = process.env.AUTO_POST_STORY !== "false";
       if (autoStory) {
-        try {
-          console.log(`[Worker] Menyiapkan gambar Story (SG) berformat reshare postingan untuk Menfess #${job.id}...`);
-          const storyBuffer = await createStoryImageFromSlide(slideBuffers[0], {
-            menfessId: job.id,
-            recipient: job.recipient,
-            sender: job.sender,
-            templateStyle,
-          });
-          console.log(`[Worker] Mengunggah Menfess #${job.id} ke Instagram Story (SG) dengan tautan langsung ke postingan feed...`);
-          const storyId = await publishStory(storyBuffer, {
-            feedMediaId: mediaId,
-            postCode,
-          });
-          console.log(`📸 [Worker] Menfess #${job.id} BERHASIL diunggah ke Story (SG)! Story ID: ${storyId}`);
-        } catch (storyError: unknown) {
-          const sErr = storyError as Error;
-          console.warn(`⚠️ [Worker] Peringatan: Gagal mengunggah ke Story untuk #${job.id} (Feed tetap terposting):`, sErr.message);
+        // Berikan jeda 4 detik agar Instagram menyelesaikan replikasi database CDN media feed baru
+        console.log(`[Worker] Menunggu 4 detik agar media feed #${job.id} terindeks sepenuhnya di CDN Instagram...`);
+        await new Promise((r) => setTimeout(r, 4000));
+
+        let storyUploaded = false;
+        let lastStoryError: Error | null = null;
+
+        for (let attempt = 1; attempt <= 2 && !storyUploaded; attempt++) {
+          try {
+            console.log(`[Worker] [Percobaan ${attempt}] Menyiapkan gambar Story (SG) untuk Menfess #${job.id}...`);
+            const storyBuffer = await createStoryImageFromSlide(slideBuffers[0], {
+              menfessId: job.id,
+              recipient: job.recipient,
+              sender: job.sender,
+              templateStyle,
+            });
+
+            console.log(`[Worker] [Percobaan ${attempt}] Mengunggah Menfess #${job.id} ke Instagram Story (SG)...`);
+            const storyId = await publishStory(
+              storyBuffer,
+              attempt === 1
+                ? { feedMediaId: mediaId, postCode }
+                : {} // Retry clean without metadata if first try fails
+            );
+            console.log(`📸 [Worker] Menfess #${job.id} BERHASIL diunggah ke Story (SG)! Story ID: ${storyId}`);
+            storyUploaded = true;
+          } catch (storyError: unknown) {
+            lastStoryError = storyError as Error;
+            console.warn(
+              `⚠️ [Worker] [Percobaan ${attempt}] Gagal mengunggah ke Story untuk #${job.id}:`,
+              lastStoryError.message
+            );
+            if (attempt < 2) {
+              await new Promise((r) => setTimeout(r, 2000));
+            }
+          }
+        }
+
+        if (!storyUploaded && lastStoryError) {
+          console.warn(`⚠️ [Worker] Peringatan: Story untuk #${job.id} dilewati setelah 2 percobaan. Postingan feed tetap aman.`);
         }
       }
     } catch (error: unknown) {
