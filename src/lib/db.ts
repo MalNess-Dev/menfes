@@ -1,6 +1,9 @@
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
+import { loadEnvConfig } from "@next/env";
 import * as schema from "./schema";
+
+loadEnvConfig(process.cwd());
 
 const databaseUrl = process.env.TURSO_DATABASE_URL || process.env.DATABASE_URL || "file:./prisma/dev.db";
 const authToken = process.env.TURSO_AUTH_TOKEN;
