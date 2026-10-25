@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import path from "path";
+import http from "http";
 import { eq } from "drizzle-orm";
 
 // Load .env.local first, then fallback to .env
@@ -17,10 +18,11 @@ import {
   getBotStatus,
   setBotHalted,
 } from "../lib/queue";
-import { renderAllSlides } from "../lib/template";
+import { renderAllSlides, createStoryImageFromSlide } from "../lib/template";
 import {
   publishImage,
   publishAlbum,
+  publishStory,
   buildCaption,
   IgCheckpointError,
   IgLoginRequiredError,
@@ -28,7 +30,47 @@ import {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Menjalankan server web sederhana untuk Render & UptimeRobot.
+ * Menjamin Render Web Service mendeteksi port terbuka dan tidak terkena timeout.
+ */
+function startWebServer() {
+  const PORT = process.env.PORT || 10000;
+
+  const server = http.createServer((req, res) => {
+    const url = req.url || "/";
+    if (url === "/" || url === "/ping") {
+      res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("Bot Menfess Instagram UNJ berjalan dengan baik! 🚀");
+      return;
+    }
+    if (url === "/health") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          status: "ok",
+          service: "unj-menfess-worker",
+          uptimeSeconds: Math.floor(process.uptime()),
+          timestamp: new Date().toISOString(),
+          botPaused: isBotPaused(),
+        })
+      );
+      return;
+    }
+    res.writeHead(404, { "Content-Type": "text/plain" });
+    res.end("Not Found");
+  });
+
+  server.listen(Number(PORT), "0.0.0.0", () => {
+    console.log(`🌐 [Web Server] Server aktif di port ${PORT} (0.0.0.0:${PORT})`);
+    console.log(`   Endpoint UptimeRobot / Render: GET / atau GET /health`);
+  });
+}
+
 async function runWorker() {
+  // 1. Jalankan server web terlebih dahulu agar port langsung terbuka bagi Render
+  startWebServer();
+
   console.log("==================================================================");
   console.log("🚀 Simple IG Menfess Worker Started");
   console.log("==================================================================");
@@ -157,14 +199,16 @@ async function runWorker() {
       const caption = buildCaption(job.recipient, job.sender, job.id);
 
       // 3. Post to Instagram
-      let mediaId: string;
+      let pubResult: { mediaId: string; code?: string };
       if (totalSlides === 1) {
         console.log(`[Worker] Mengunggah foto tunggal ke Instagram...`);
-        mediaId = await publishImage(slideBuffers[0], caption);
+        pubResult = await publishImage(slideBuffers[0], caption);
       } else {
         console.log(`[Worker] Mengunggah album carousel (${totalSlides} slide) ke Instagram...`);
-        mediaId = await publishAlbum(slideBuffers, caption);
+        pubResult = await publishAlbum(slideBuffers, caption);
       }
+      const mediaId = pubResult.mediaId;
+      const postCode = pubResult.code;
 
       // 4. Update status to 'published'
       await db
@@ -178,7 +222,31 @@ async function runWorker() {
         })
         .where(eq(menfess.id, job.id));
 
-      console.log(`✅ [Worker] Menfess #${job.id} BERHASIL diposting! Media ID: ${mediaId}`);
+      const postUrlDisplay = postCode ? ` (https://www.instagram.com/p/${postCode}/)` : "";
+      console.log(`✅ [Worker] Menfess #${job.id} BERHASIL diposting ke Feed! Media ID: ${mediaId}${postUrlDisplay}`);
+
+      // 5. Otomatis upload ke Instagram Story (SG) berformat reshare postingan yang langsung terhubung ke postingan
+      const autoStory = process.env.AUTO_POST_STORY !== "false";
+      if (autoStory) {
+        try {
+          console.log(`[Worker] Menyiapkan gambar Story (SG) berformat reshare postingan untuk Menfess #${job.id}...`);
+          const storyBuffer = await createStoryImageFromSlide(slideBuffers[0], {
+            menfessId: job.id,
+            recipient: job.recipient,
+            sender: job.sender,
+            templateStyle,
+          });
+          console.log(`[Worker] Mengunggah Menfess #${job.id} ke Instagram Story (SG) dengan tautan langsung ke postingan feed...`);
+          const storyId = await publishStory(storyBuffer, {
+            feedMediaId: mediaId,
+            postCode,
+          });
+          console.log(`📸 [Worker] Menfess #${job.id} BERHASIL diunggah ke Story (SG)! Story ID: ${storyId}`);
+        } catch (storyError: unknown) {
+          const sErr = storyError as Error;
+          console.warn(`⚠️ [Worker] Peringatan: Gagal mengunggah ke Story untuk #${job.id} (Feed tetap terposting):`, sErr.message);
+        }
+      }
     } catch (error: unknown) {
       const err = error as Error;
       console.error(`❌ [Worker] Gagal memposting Menfess #${job.id}:`, err.message);

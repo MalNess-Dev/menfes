@@ -141,10 +141,20 @@ async function uploadPhotoToWeb(
   return { uploadId, name, width, height };
 }
 
-export async function publishImage(buffer: Buffer, caption: string): Promise<string> {
+export interface PublishResult {
+  mediaId: string;
+  code?: string;
+}
+
+export interface PublishStoryOptions {
+  feedMediaId?: string;
+  postCode?: string;
+}
+
+export async function publishImage(buffer: Buffer, caption: string): Promise<PublishResult> {
   if (process.env.IG_DEV_MOCK === "true") {
     console.log("[Instagram MOCK] Mode simulasi aktif. Menfess berhasil disimulasikan.");
-    return `mock_media_${Date.now()}`;
+    return { mediaId: `mock_media_${Date.now()}`, code: "mock_code" };
   }
   if (process.env.IG_SESSIONID?.trim()) {
     const auth = await getWebAuthContext();
@@ -181,22 +191,25 @@ export async function publishImage(buffer: Buffer, caption: string): Promise<str
       }
       throw new Error(`Konfigurasi media gagal: ${configData.message || JSON.stringify(configData)}`);
     }
-    const postCode = configData.media.code ? ` (https://www.instagram.com/p/${configData.media.code}/)` : "";
+    const code = configData.media.code;
+    const postCode = code ? ` (https://www.instagram.com/p/${code}/)` : "";
     console.log(`[Instagram Web] Berhasil memposting ke feed: ${configData.media.id}${postCode}`);
-    return configData.media.id;
+    return { mediaId: configData.media.id, code };
   }
   const ig = await getAuthenticatedClient();
   const publishResult = await ig.publish.photo({ file: buffer, caption });
-  console.log(`[Instagram App API] Berhasil memposting foto tunggal: ${publishResult.media.id}`);
-  return publishResult.media.id;
+  const code = (publishResult as unknown as { media?: { code?: string } })?.media?.code;
+  const postCode = code ? ` (https://www.instagram.com/p/${code}/)` : "";
+  console.log(`[Instagram App API] Berhasil memposting foto tunggal: ${publishResult.media.id}${postCode}`);
+  return { mediaId: publishResult.media.id, code };
 }
 
-export async function publishAlbum(buffers: Buffer[], caption: string): Promise<string> {
+export async function publishAlbum(buffers: Buffer[], caption: string): Promise<PublishResult> {
   if (buffers.length === 1) return publishImage(buffers[0], caption);
 
   if (process.env.IG_DEV_MOCK === "true") {
     console.log(`[Instagram MOCK] Mode simulasi aktif. Album (${buffers.length} slide) berhasil disimulasikan.`);
-    return `mock_album_${Date.now()}`;
+    return { mediaId: `mock_album_${Date.now()}`, code: "mock_code" };
   }
 
   // 1. Web session path (proven working via JSON payload on configure_sidecar)
@@ -288,9 +301,10 @@ export async function publishAlbum(buffers: Buffer[], caption: string): Promise<
       throw new Error(`Konfigurasi carousel gagal: ${configData.message || JSON.stringify(configData)}`);
     }
 
-    const postCode = configData.media.code ? ` (https://www.instagram.com/p/${configData.media.code}/)` : "";
+    const code = configData.media.code;
+    const postCode = code ? ` (https://www.instagram.com/p/${code}/)` : "";
     console.log(`[Instagram Web] Berhasil memposting carousel (${buffers.length} slide): ${configData.media.id}${postCode}`);
-    return configData.media.id;
+    return { mediaId: configData.media.id, code };
   }
 
   // 2. Fallback: IgApiClient (Mobile App API)
@@ -324,10 +338,12 @@ export async function publishAlbum(buffers: Buffer[], caption: string): Promise<
       height,
     })),
   });
-  const mediaId = result?.media?.id ?? result?.media_id ?? JSON.stringify(result).slice(0, 30);
-  const postCode = result?.media?.code ? ` (https://www.instagram.com/p/${result.media.code}/)` : "";
+  const rawId = result?.media?.id ?? result?.media_id ?? JSON.stringify(result).slice(0, 30);
+  const mediaId = rawId.toString();
+  const code = (result?.media as unknown as { code?: string })?.code;
+  const postCode = code ? ` (https://www.instagram.com/p/${code}/)` : "";
   console.log(`[Instagram App API] Berhasil memposting carousel (${buffers.length} slide): ${mediaId}${postCode}`);
-  return mediaId;
+  return { mediaId, code };
 }
 
 export function buildCaption(
@@ -346,4 +362,164 @@ export function buildCaption(
     lines.push("#menfessunj #unjmenfess");
   }
   return lines.join("\n").trim();
+}
+
+/**
+ * Publishes a 1080x1920 vertical image to Instagram Story (SG).
+ * Connects the Story directly to the Feed post so tapping opens the original post.
+ */
+export async function publishStory(
+  buffer: Buffer,
+  optionsOrFeedMediaId?: string | PublishStoryOptions
+): Promise<string> {
+  if (process.env.IG_DEV_MOCK === "true") {
+    console.log("[Instagram MOCK] Mode simulasi aktif. Story (SG) berhasil disimulasikan.");
+    return `mock_story_${Date.now()}`;
+  }
+
+  const options: PublishStoryOptions =
+    typeof optionsOrFeedMediaId === "string"
+      ? { feedMediaId: optionsOrFeedMediaId }
+      : optionsOrFeedMediaId || {};
+
+  const feedMediaId = options.feedMediaId;
+  const postCode = options.postCode;
+
+  // Instagram requires numeric media_id (strip _userId suffix if present)
+  const cleanMediaId = feedMediaId ? feedMediaId.split("_")[0] : undefined;
+  const postUrl = postCode
+    ? `https://www.instagram.com/p/${postCode}/`
+    : cleanMediaId
+    ? `https://www.instagram.com/p/${cleanMediaId}/`
+    : undefined;
+
+  // 1. Web session path
+  if (process.env.IG_SESSIONID?.trim()) {
+    const auth = await getWebAuthContext();
+    const { uploadId } = await uploadPhotoToWeb(buffer, auth, false);
+
+    const form = new URLSearchParams();
+    form.append("upload_id", uploadId);
+    form.append("source_type", "3");
+    form.append("configure_mode", "1");
+    form.append("client_shared_at", Date.now().toString());
+
+    if (cleanMediaId) {
+      const mediaStickers = [
+        {
+          media_id: cleanMediaId,
+          x: 0.5,
+          y: 0.48,
+          width: 0.85,
+          height: 0.55,
+          rotation: 0.0,
+          type: "feed_media",
+        },
+      ];
+      form.append("attached_media", JSON.stringify(mediaStickers));
+      form.append("reshared_media_id", cleanMediaId);
+      form.append("story_media_stickers", JSON.stringify(mediaStickers));
+      form.append("story_sticker_ids", `media_simple_${cleanMediaId}`);
+    }
+
+    if (postUrl) {
+      form.append("story_cta", JSON.stringify([{ links: [{ webUri: postUrl }] }]));
+      form.append(
+        "story_link_stickers",
+        JSON.stringify([
+          {
+            x: 0.5,
+            y: 0.78,
+            z: 0,
+            width: 0.5,
+            height: 0.08,
+            rotation: 0.0,
+            url: postUrl,
+            link_title: "Lihat Postingan",
+            link_type: "weblink",
+          },
+        ])
+      );
+    }
+
+    const configRes = await fetch("https://www.instagram.com/api/v1/media/configure_to_story/", {
+      method: "POST",
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Cookie: auth.cookieHeader,
+        "X-CSRFToken": auth.csrfToken,
+        "X-IG-App-ID": "936619743392459",
+        "X-ASBD-ID": "129477",
+        "X-Requested-With": "XMLHttpRequest",
+        Referer: "https://www.instagram.com/",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: form.toString(),
+    });
+
+    const configData = (await configRes.json()) as WebUploadResult;
+    if (configData.status !== "ok" || !configData.media) {
+      if (configData.message?.includes("checkpoint_required")) {
+        const checkpointErr = new Error("Instagram checkpoint_required terdeteksi.");
+        checkpointErr.name = "IgCheckpointError";
+        throw checkpointErr;
+      }
+      if (configData.message?.includes("login_required")) {
+        const loginErr = new Error("Instagram session expired (login_required).");
+        loginErr.name = "IgLoginRequiredError";
+        throw loginErr;
+      }
+      throw new Error(`Konfigurasi story gagal: ${configData.message || JSON.stringify(configData)}`);
+    }
+
+    console.log(
+      `[Instagram Web] Berhasil memposting ke Story (SG): ${configData.media.id}${
+        postUrl ? ` (Tersambung ke ${postUrl})` : ""
+      }`
+    );
+    return configData.media.id;
+  }
+
+  // 2. Mobile App API path
+  const ig = await getAuthenticatedClient();
+  const storyOptions: Record<string, unknown> = { file: buffer };
+  const stickerIds: string[] = [];
+
+  if (cleanMediaId) {
+    const attachedMedia = {
+      media_id: cleanMediaId,
+      x: 0.5,
+      y: 0.48,
+      width: 0.85,
+      height: 0.55,
+      rotation: 0.0,
+    };
+    storyOptions.media = attachedMedia;
+    storyOptions.attached_media = [attachedMedia];
+    storyOptions.reshared_media_id = cleanMediaId;
+    stickerIds.push(`media_simple_${cleanMediaId}`);
+  }
+
+  if (postUrl) {
+    storyOptions.link = postUrl;
+    storyOptions.story_cta = [
+      {
+        links: [{ webUri: postUrl }],
+      },
+    ];
+  }
+
+  if (stickerIds.length > 0) {
+    storyOptions.story_sticker_ids = stickerIds.join(",");
+  }
+
+  const result = await ig.publish.story(storyOptions as any);
+  const mediaId = (result?.media?.id || result?.id || "story_ok").toString();
+  console.log(
+    `[Instagram App API] Berhasil memposting ke Story (SG): ${mediaId}${
+      postUrl ? ` (Tersambung ke ${postUrl})` : ""
+    }`
+  );
+  return mediaId;
 }

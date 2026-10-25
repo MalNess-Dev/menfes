@@ -272,9 +272,9 @@ export async function generateSlideSvg(options: RenderSlideOptions): Promise<str
                     display: "flex",
                     alignItems: "center",
                     backgroundColor: "rgba(255, 221, 0, 0.15)",
-                    padding: "5px 14px",
-                    borderRadius: "8px",
-                    border: "1px solid rgba(255, 221, 0, 0.50)",
+                    padding: "8px 20px",
+                    borderRadius: "12px",
+                    border: "2px solid rgba(255, 221, 0, 0.60)",
                   },
                 },
                 React.createElement(
@@ -283,8 +283,9 @@ export async function generateSlideSvg(options: RenderSlideOptions): Promise<str
                     style: {
                       color: "#FFDD00",
                       fontWeight: 900,
-                      fontSize: "13px",
-                      marginRight: "8px",
+                      fontSize: "22px",
+                      letterSpacing: "0.05em",
+                      marginRight: "10px",
                     },
                   },
                   "TO:"
@@ -295,7 +296,7 @@ export async function generateSlideSvg(options: RenderSlideOptions): Promise<str
                     style: {
                       color: "#FFFFFF",
                       fontWeight: 800,
-                      fontSize: "16px",
+                      fontSize: "26px",
                     },
                   },
                   cleanTo
@@ -307,10 +308,10 @@ export async function generateSlideSvg(options: RenderSlideOptions): Promise<str
                   style: {
                     display: "flex",
                     alignItems: "center",
-                    backgroundColor: "rgba(0, 101, 105, 0.50)",
-                    padding: "5px 14px",
-                    borderRadius: "8px",
-                    border: "1px solid rgba(126, 236, 228, 0.40)",
+                    backgroundColor: "rgba(0, 101, 105, 0.55)",
+                    padding: "8px 20px",
+                    borderRadius: "12px",
+                    border: "2px solid rgba(126, 236, 228, 0.50)",
                   },
                 },
                 React.createElement(
@@ -319,8 +320,9 @@ export async function generateSlideSvg(options: RenderSlideOptions): Promise<str
                     style: {
                       color: "#7eece4",
                       fontWeight: 900,
-                      fontSize: "13px",
-                      marginRight: "8px",
+                      fontSize: "22px",
+                      letterSpacing: "0.05em",
+                      marginRight: "10px",
                     },
                   },
                   "FROM:"
@@ -331,7 +333,7 @@ export async function generateSlideSvg(options: RenderSlideOptions): Promise<str
                     style: {
                       color: "#D1FAE5",
                       fontWeight: 700,
-                      fontSize: "16px",
+                      fontSize: "26px",
                     },
                   },
                   cleanFrom
@@ -630,18 +632,19 @@ export async function generateSlideSvg(options: RenderSlideOptions): Promise<str
                       backgroundColor: "#FFDD00",
                       color: "#000000",
                       fontWeight: 900,
-                      padding: "3px 10px",
-                      borderRadius: "6px",
-                      border: "2px solid #000000",
-                      marginRight: "10px",
-                      fontSize: "13px",
+                      padding: "6px 16px",
+                      borderRadius: "8px",
+                      border: "3px solid #000000",
+                      marginRight: "12px",
+                      fontSize: "22px",
+                      letterSpacing: "0.05em",
                     },
                   },
                   "TO:"
                 ),
                 React.createElement(
                   "span",
-                  { style: { fontWeight: 900, color: "#0F172A", fontSize: "17px" } },
+                  { style: { fontWeight: 900, color: "#0F172A", fontSize: "26px" } },
                   cleanTo
                 )
               ),
@@ -660,18 +663,19 @@ export async function generateSlideSvg(options: RenderSlideOptions): Promise<str
                       backgroundColor: "#006569",
                       color: "#FFFFFF",
                       fontWeight: 900,
-                      padding: "3px 10px",
-                      borderRadius: "6px",
-                      border: "2px solid #000000",
-                      marginRight: "10px",
-                      fontSize: "13px",
+                      padding: "6px 16px",
+                      borderRadius: "8px",
+                      border: "3px solid #000000",
+                      marginRight: "12px",
+                      fontSize: "22px",
+                      letterSpacing: "0.05em",
                     },
                   },
                   "FROM:"
                 ),
                 React.createElement(
                   "span",
-                  { style: { fontWeight: 800, color: "#334155", fontSize: "17px" } },
+                  { style: { fontWeight: 800, color: "#334155", fontSize: "26px" } },
                   cleanFrom
                 )
               )
@@ -930,29 +934,47 @@ export async function generateSlideSvg(options: RenderSlideOptions): Promise<str
               },
               React.createElement(
                 "div",
-                { style: { display: "flex", alignItems: "center", fontSize: "16px" } },
+                {
+                  style: {
+                    display: "flex",
+                    alignItems: "center",
+                    backgroundColor: "rgba(0, 101, 105, 0.40)",
+                    padding: "6px 18px",
+                    borderRadius: "8px",
+                    border: "1.5px solid rgba(62, 232, 223, 0.45)",
+                  },
+                },
                 React.createElement(
                   "span",
-                  { style: { color: "#94a3b8", fontWeight: 700, marginRight: "8px" } },
+                  { style: { color: "#3ee8df", fontWeight: 900, fontSize: "22px", marginRight: "10px" } },
                   "> TARGET:"
                 ),
                 React.createElement(
                   "span",
-                  { style: { fontWeight: 800, color: "#FFFFFF" } },
+                  { style: { fontWeight: 900, color: "#FFFFFF", fontSize: "26px" } },
                   cleanTo
                 )
               ),
               React.createElement(
                 "div",
-                { style: { display: "flex", alignItems: "center", fontSize: "16px" } },
+                {
+                  style: {
+                    display: "flex",
+                    alignItems: "center",
+                    backgroundColor: "rgba(0, 36, 40, 0.60)",
+                    padding: "6px 18px",
+                    borderRadius: "8px",
+                    border: "1.5px solid rgba(255, 221, 0, 0.45)",
+                  },
+                },
                 React.createElement(
                   "span",
-                  { style: { color: "#94a3b8", fontWeight: 700, marginRight: "8px" } },
+                  { style: { color: "#FFDD00", fontWeight: 900, fontSize: "22px", marginRight: "10px" } },
                   "> SENDER:"
                 ),
                 React.createElement(
                   "span",
-                  { style: { fontWeight: 800, color: "#FFDD00" } },
+                  { style: { fontWeight: 900, color: "#FFDD00", fontSize: "26px" } },
                   cleanFrom
                 )
               )
@@ -963,7 +985,10 @@ export async function generateSlideSvg(options: RenderSlideOptions): Promise<str
                 style: {
                   color: "#3ee8df",
                   fontWeight: 900,
-                  fontSize: "13px",
+                  fontSize: "18px",
+                  padding: "4px 12px",
+                  borderRadius: "6px",
+                  border: "1px solid rgba(62, 232, 223, 0.40)",
                 },
               },
               "ENCRYPTED"
@@ -1186,29 +1211,47 @@ export async function generateSlideSvg(options: RenderSlideOptions): Promise<str
             },
             React.createElement(
               "div",
-              { style: { display: "flex", alignItems: "center", fontSize: "16px" } },
+              {
+                style: {
+                  display: "flex",
+                  alignItems: "center",
+                  backgroundColor: "#F1F5F9",
+                  padding: "6px 18px",
+                  borderRadius: "10px",
+                  border: "1.5px solid #CBD5E1",
+                },
+              },
               React.createElement(
                 "span",
-                { style: { color: "#64748b", fontWeight: 700, marginRight: "8px" } },
+                { style: { color: "#64748B", fontWeight: 800, fontSize: "22px", marginRight: "10px" } },
                 "Dear:"
               ),
               React.createElement(
                 "span",
-                { style: { fontWeight: 800, color: "#006569" } },
+                { style: { fontWeight: 900, color: "#006569", fontSize: "26px" } },
                 cleanTo
               )
             ),
             React.createElement(
               "div",
-              { style: { display: "flex", alignItems: "center", fontSize: "16px" } },
+              {
+                style: {
+                  display: "flex",
+                  alignItems: "center",
+                  backgroundColor: "#F8FAFC",
+                  padding: "6px 18px",
+                  borderRadius: "10px",
+                  border: "1.5px solid #CBD5E1",
+                },
+              },
               React.createElement(
                 "span",
-                { style: { color: "#64748b", fontWeight: 700, marginRight: "8px" } },
+                { style: { color: "#64748B", fontWeight: 800, fontSize: "22px", marginRight: "10px" } },
                 "From:"
               ),
               React.createElement(
                 "span",
-                { style: { fontWeight: 700, color: "#475569" } },
+                { style: { fontWeight: 800, color: "#334155", fontSize: "26px" } },
                 cleanFrom
               )
             )
@@ -1220,8 +1263,8 @@ export async function generateSlideSvg(options: RenderSlideOptions): Promise<str
                 backgroundColor: "#E2E8F0",
                 color: "#475569",
                 fontWeight: 800,
-                fontSize: "12px",
-                padding: "4px 10px",
+                fontSize: "18px",
+                padding: "6px 16px",
                 borderRadius: "9999px",
               },
             },
@@ -1372,4 +1415,228 @@ export async function renderAllSlides(
   }
 
   return buffers;
+}
+
+export interface StoryRenderOptions {
+  menfessId?: number;
+  recipient?: string | null;
+  sender?: string | null;
+  templateStyle?: TemplateStyle;
+}
+
+/**
+ * Creates a vertical 1080x1920 Instagram Story (SG) image that authentically mimics
+ * Instagram's native 'Add post to story' (Bagikan postingan ke cerita) reshare widget.
+ * Features a floating post card with account avatar & verified badge, ambient gradient backdrop,
+ * and a native 'Lihat Postingan' interactive tap pill.
+ */
+export async function createStoryImageFromSlide(
+  slide1Buffer: Buffer,
+  options?: StoryRenderOptions
+): Promise<Buffer> {
+  const fontData = getFontBuffer();
+  const base64Slide = `data:image/jpeg;base64,${slide1Buffer.toString("base64")}`;
+
+  const igUser = process.env.IG_USERNAME?.trim() || "unj_menfess";
+
+  const element = React.createElement(
+    "div",
+    {
+      style: {
+        width: "1080px",
+        height: "1920px",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        alignItems: "center",
+        backgroundColor: "#021618",
+        backgroundImage:
+          "linear-gradient(180deg, #011d20 0%, #004548 45%, #012023 100%)",
+        padding: "0 60px",
+        fontFamily: "Inter",
+        color: "#FFFFFF",
+        boxSizing: "border-box",
+        position: "relative",
+      },
+    },
+    // The Floating Native Instagram Reshare Post Card
+    React.createElement(
+      "div",
+      {
+        style: {
+          display: "flex",
+          flexDirection: "column",
+          width: "920px",
+          backgroundColor: "#001416",
+          borderRadius: "32px",
+          overflow: "hidden",
+          border: "1.5px solid rgba(255, 255, 255, 0.16)",
+          boxShadow: "0 30px 80px -10px rgba(0, 0, 0, 0.8)",
+        },
+      },
+      // Native Profile Header Bar on top of post
+      React.createElement(
+        "div",
+        {
+          style: {
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            width: "100%",
+            padding: "20px 26px",
+            backgroundColor: "rgba(0, 24, 26, 0.96)",
+            borderBottom: "1px solid rgba(255, 255, 255, 0.10)",
+            boxSizing: "border-box",
+          },
+        },
+        // Profile Info
+        React.createElement(
+          "div",
+          {
+            style: {
+              display: "flex",
+              alignItems: "center",
+            },
+          },
+          // Avatar
+          React.createElement(
+            "div",
+            {
+              style: {
+                width: "48px",
+                height: "48px",
+                borderRadius: "24px",
+                backgroundColor: "#006569",
+                border: "2px solid #FFDD00",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#FFDD00",
+                fontWeight: 900,
+                fontSize: "22px",
+              },
+            },
+            "U"
+          ),
+          // Username & Badge
+          React.createElement(
+            "div",
+            {
+              style: {
+                display: "flex",
+                alignItems: "center",
+                marginLeft: "16px",
+              },
+            },
+            React.createElement(
+              "span",
+              {
+                style: {
+                  color: "#FFFFFF",
+                  fontWeight: 800,
+                  fontSize: "24px",
+                  letterSpacing: "-0.01em",
+                },
+              },
+              igUser
+            ),
+            // Verified Badge
+            React.createElement(
+              "div",
+              {
+                style: {
+                  width: "22px",
+                  height: "22px",
+                  borderRadius: "11px",
+                  backgroundColor: "#0095F6",
+                  color: "#FFFFFF",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "13px",
+                  fontWeight: 900,
+                  marginLeft: "10px",
+                },
+              },
+              "✓"
+            )
+          )
+        ),
+        // Dots
+        React.createElement(
+          "span",
+          {
+            style: {
+              color: "rgba(255, 255, 255, 0.5)",
+              fontSize: "24px",
+              fontWeight: 900,
+              letterSpacing: "3px",
+            },
+          },
+          "•••"
+        )
+      ),
+
+      // Slide 1 Image (1080x1080 scaled to 920x920 inside the card)
+      React.createElement("img", {
+        src: base64Slide,
+        style: {
+          width: "920px",
+          height: "920px",
+          display: "block",
+        },
+      })
+    ),
+
+    // Native-Style 'Lihat Postingan' Link Sticker Below the Post Card
+    React.createElement(
+      "div",
+      {
+        style: {
+          display: "flex",
+          alignItems: "center",
+          gap: "12px",
+          marginTop: "44px",
+          backgroundColor: "rgba(255, 255, 255, 0.22)",
+          border: "1.5px solid rgba(255, 255, 255, 0.40)",
+          padding: "16px 38px",
+          borderRadius: "9999px",
+          boxShadow: "0 12px 30px rgba(0, 0, 0, 0.35)",
+        },
+      },
+      React.createElement("span", { style: { color: "#FFFFFF", fontSize: "22px" } }, "🔗"),
+      React.createElement(
+        "span",
+        {
+          style: {
+            color: "#FFFFFF",
+            fontSize: "24px",
+            fontWeight: 800,
+            letterSpacing: "0.02em",
+          },
+        },
+        "Lihat Postingan"
+      )
+    )
+  );
+
+  const svg = await satori(element, {
+    width: 1080,
+    height: 1920,
+    fonts: [{ name: "Inter", data: fontData, weight: 400, style: "normal" }],
+  });
+
+  const resvg = new Resvg(svg, {
+    fitTo: { mode: "width", value: 1080 },
+    font: { loadSystemFonts: false },
+  });
+
+  const pngData = resvg.render();
+  const pngBuffer = pngData.asPng();
+
+  const storyJpeg = await sharp(pngBuffer)
+    .jpeg({ quality: 95, chromaSubsampling: "4:4:4" })
+    .toBuffer();
+
+  return storyJpeg;
 }

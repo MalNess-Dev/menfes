@@ -28,6 +28,7 @@ import {
   Lightbulb,
 } from "lucide-react";
 import UnjMascot from "@/components/UnjMascot";
+import { splitMessageIntoSlides, CHARS_PER_SLIDE, MAX_SLIDES } from "@/lib/slides";
 
 declare global {
   interface Window {
@@ -45,9 +46,7 @@ declare global {
   }
 }
 
-const CHARS_PER_SLIDE = 350;
-const MAX_CHARS = 2500;
-const MAX_SLIDES = 5;
+const MAX_CHARS = 3500; // 10 slides * 350 characters
 
 type TemplateType = "comic" | "unj-classic" | "cyber" | "scrapbook";
 
@@ -93,8 +92,7 @@ const TEMPLATES: TemplateOption[] = [
 export default function MenfessPage() {
   const [recipient, setRecipient] = useState("");
   const [sender, setSender] = useState("");
-  const [slidesList, setSlidesList] = useState<string[]>([""]);
-  const [activeSlideTab, setActiveSlideTab] = useState<number>(0);
+  const [message, setMessage] = useState("");
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateType>("unj-classic");
   const [turnstileToken, setTurnstileToken] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -119,47 +117,14 @@ export default function MenfessPage() {
   const widgetIdRef = useRef<string | null>(null);
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
 
-  const slideCount = Math.max(1, slidesList.length);
+  // Auto-split message into clean slides strictly <= 350 characters
+  const slides = useMemo(() => {
+    return splitMessageIntoSlides(message, CHARS_PER_SLIDE, MAX_SLIDES);
+  }, [message]);
 
-  // Helper functions for slide management (2 to max 5 slides)
-  const handleSlideChange = (index: number, text: string) => {
-    setSlidesList((prev) => {
-      const next = [...prev];
-      next[index] = text;
-      return next;
-    });
-  };
+  const slideCount = Math.max(1, slides.length);
 
-  const handleAddSlide = () => {
-    if (slidesList.length >= MAX_SLIDES) return;
-    setSlidesList((prev) => [...prev, ""]);
-    const nextIdx = slidesList.length;
-    setActiveSlideTab(nextIdx);
-    setPreviewSlideIdx(nextIdx);
-    setTimeout(() => {
-      messageTextareaRef.current?.focus();
-    }, 50);
-  };
-
-  const handleRemoveSlide = (indexToRemove: number) => {
-    if (slidesList.length <= 1) return;
-    setSlidesList((prev) => prev.filter((_, idx) => idx !== indexToRemove));
-    setActiveSlideTab((prev) => {
-      if (prev >= indexToRemove && prev > 0) return prev - 1;
-      return Math.min(prev, slidesList.length - 2);
-    });
-    setPreviewSlideIdx((prev) => {
-      if (prev >= indexToRemove && prev > 0) return prev - 1;
-      return Math.min(prev, slidesList.length - 2);
-    });
-  };
-
-  const switchActiveSlide = (idx: number) => {
-    setActiveSlideTab(idx);
-    setPreviewSlideIdx(idx);
-  };
-
-  // Validate slide index
+  // Validate preview slide index
   useEffect(() => {
     if (previewSlideIdx >= slideCount) {
       setPreviewSlideIdx(Math.max(0, slideCount - 1));
@@ -168,7 +133,7 @@ export default function MenfessPage() {
 
   // Mascot mood management
   useEffect(() => {
-    const hasAnyContent = slidesList.some((s) => s.trim().length > 0);
+    const hasAnyContent = message.trim().length > 0;
     if (isSubmitting) {
       setMascotMood("submitting");
     } else if (successData) {
@@ -178,7 +143,22 @@ export default function MenfessPage() {
     } else {
       setMascotMood("idle");
     }
-  }, [slidesList, recipient, isSubmitting, successData]);
+  }, [message, recipient, isSubmitting, successData]);
+
+  // Insert explicit slide separator at cursor position
+  const handleInsertSlideBreak = () => {
+    if (!messageTextareaRef.current) return;
+    const textarea = messageTextareaRef.current;
+    const start = textarea.selectionStart ?? message.length;
+    const end = textarea.selectionEnd ?? message.length;
+    const separator = "\n\n---slide---\n\n";
+    const newMessage = message.slice(0, start) + separator + message.slice(end);
+    setMessage(newMessage);
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + separator.length, start + separator.length);
+    }, 50);
+  };
 
   // Initialize Turnstile widget if site key is configured
   useEffect(() => {
@@ -204,26 +184,19 @@ export default function MenfessPage() {
     return () => clearInterval(interval);
   }, [turnstileSiteKey]);
 
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessData(null);
 
-    const filledSlides = slidesList.map((s) => s.trim()).filter((s) => s.length > 0);
-    if (filledSlides.length === 0) {
-      setErrorMsg("Silakan ketik isi pesan menfess minimal pada Slide 1.");
+    const trimmedMsg = message.trim();
+    if (!trimmedMsg) {
+      setErrorMsg("Silakan ketik isi pesan menfess terlebih dahulu.");
       messageTextareaRef.current?.focus();
       return;
     }
 
-    // Join slides with explicit slide separator
-    const messageToSend = slidesList
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0)
-      .join("\n\n---slide---\n\n");
-
-    if (messageToSend.length > MAX_CHARS) {
+    if (trimmedMsg.length > MAX_CHARS) {
       setErrorMsg(`Pesan melebihi batas maksimal ${MAX_CHARS.toLocaleString()} karakter.`);
       return;
     }
@@ -242,7 +215,7 @@ export default function MenfessPage() {
         body: JSON.stringify({
           recipient: recipient.trim() || undefined,
           sender: sender.trim() || undefined,
-          message: messageToSend,
+          message: trimmedMsg,
           template: selectedTemplate,
           turnstileToken: turnstileToken || undefined,
         }),
@@ -255,7 +228,7 @@ export default function MenfessPage() {
       }
 
       const createdId = data.id ?? data.data?.id;
-      const createdSlideCount = data.slideCount ?? data.data?.slideCount ?? filledSlides.length;
+      const createdSlideCount = data.slideCount ?? data.data?.slideCount ?? slideCount;
 
       setSuccessData({
         id: createdId,
@@ -266,8 +239,7 @@ export default function MenfessPage() {
       });
 
       // Reset form on success
-      setSlidesList([""]);
-      setActiveSlideTab(0);
+      setMessage("");
       setPreviewSlideIdx(0);
       setRecipient("");
       setSender("");
@@ -289,16 +261,24 @@ export default function MenfessPage() {
     }
   };
 
-
   const scrollToSection = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
   };
 
   const currentPreviewText =
-    slidesList[previewSlideIdx]?.trim() ||
-    (slidesList.some((s) => s.trim().length > 0)
-      ? `(Slide ${previewSlideIdx + 1} masih kosong — ketik di form)`
+    slides[previewSlideIdx]?.trim() ||
+    (message.trim().length > 0
+      ? `(Slide ${previewSlideIdx + 1} belum terisi)`
       : "Tuliskan pesan menfess kamu di form... Pesanmu akan tampil rapi sesuai template yang kamu pilih di sini!");
+
+  // Dynamic typography scale for preview cards to prevent vertical overflow and scrolling
+  const getPreviewFontSize = (text: string) => {
+    const len = text.length;
+    if (len < 80) return "text-sm sm:text-base font-bold leading-relaxed";
+    if (len < 180) return "text-xs sm:text-sm font-semibold leading-relaxed";
+    if (len < 280) return "text-[11.5px] sm:text-xs font-medium leading-relaxed";
+    return "text-[10px] sm:text-[11px] font-medium leading-snug";
+  };
 
   return (
     <div className="min-h-screen bg-white text-slate-800 font-sans antialiased selection:bg-[#006569] selection:text-white flex flex-col justify-between relative overflow-x-hidden">
@@ -308,7 +288,7 @@ export default function MenfessPage() {
       {/* ========================================================================= */}
       <UnjMascot
         mood={mascotMood}
-        messageText={slidesList[activeSlideTab] || slidesList.join(" ")}
+        messageText={slides[previewSlideIdx] || message}
         recipientText={recipient}
       />
 
@@ -475,7 +455,7 @@ export default function MenfessPage() {
           >
             <PenTool className="w-3.5 h-3.5 text-[#006569]" />
             <span>Tulis Pesan</span>
-            {slidesList.some((s) => s.trim().length > 0) && (
+            {message.trim().length > 0 && (
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
             )}
           </button>
@@ -651,156 +631,129 @@ export default function MenfessPage() {
                 </div>
               </div>
 
-              {/* Multi-Slide Authoring Header & Tab Switcher (Max 5 Slides) */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
+              {/* Multi-Slide Authoring Header & Dynamic Slide Tabs (Auto-Split after 350 chars) */}
+              <div className="space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-1.5">
                     <label htmlFor="message-textarea" className="font-extrabold uppercase tracking-wider text-[10.5px] sm:text-[11px] text-slate-700 flex items-center gap-1.5">
                       <Layers className="w-3.5 h-3.5 text-[#006569]" />
-                      <span>Halaman Slide ({slidesList.length}/5)</span>
+                      <span>Halaman Slide ({slideCount} Slide IG)</span>
                       <span className="text-rose-500">*</span>
                     </label>
+                    <span className="text-[10px] font-bold text-[#006569] bg-[#E6F4F1] px-2 py-0.5 rounded-full border border-[#006569]/20">
+                      Otomatis 350 Karakter/Slide
+                    </span>
                   </div>
 
-                  {slidesList.length < MAX_SLIDES && (
-                    <button
-                      type="button"
-                      onClick={handleAddSlide}
-                      className="px-2.5 py-1 rounded-xl bg-[#E6F4F1] hover:bg-[#d4ede7] text-[#006569] text-[11px] font-bold flex items-center gap-1 transition cursor-pointer border border-[#006569]/30"
-                    >
-                      <Plus className="w-3 h-3" />
-                      <span className="hidden xs:inline">Tambah Slide</span>
-                      <span className="xs:hidden">Slide</span>
-                    </button>
-                  )}
+                  {/* Insert manual slide break button */}
+                  <button
+                    type="button"
+                    onClick={handleInsertSlideBreak}
+                    title="Sisipkan pemisah slide manual (---slide---) di posisi kursor"
+                    className="px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold flex items-center gap-1 transition cursor-pointer border border-slate-300/70"
+                  >
+                    <Plus className="w-3 h-3 text-[#006569]" />
+                    <span>Pisah Slide Manual</span>
+                  </button>
                 </div>
 
-                {/* Slide Tab Buttons */}
+                {/* Auto Slide Badges & Preview Switcher */}
                 <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-                  {slidesList.map((slideText, idx) => {
-                    const isActive = activeSlideTab === idx;
-                    const isFilled = slideText.trim().length > 0;
+                  {slides.map((sText, idx) => {
+                    const isActive = previewSlideIdx === idx;
+                    const charLen = sText.trim().length;
                     return (
-                      <div
+                      <button
                         key={idx}
-                        className={`flex items-center rounded-xl border transition-all shrink-0 ${
+                        type="button"
+                        onClick={() => setPreviewSlideIdx(idx)}
+                        className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 cursor-pointer shrink-0 transition-all ${
                           isActive
-                            ? "bg-[#006569] text-white border-[#006569] shadow-sm"
+                            ? "bg-[#006569] text-white border-[#006569] shadow-sm shadow-[#006569]/30 scale-[1.02]"
                             : "bg-[#f8faf9] text-slate-700 border-slate-200 hover:bg-slate-100"
                         }`}
                       >
-                        <button
-                          type="button"
-                          onClick={() => switchActiveSlide(idx)}
-                          className="px-2.5 py-1.5 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                        <span>Slide {idx + 1}</span>
+                        <span
+                          className={`font-mono text-[10px] px-1.5 py-0.2 rounded-full ${
+                            isActive
+                              ? "bg-[#FFDD00] text-[#006569] font-black"
+                              : "bg-slate-200/80 text-slate-600"
+                          }`}
                         >
-                          <span>Slide {idx + 1}</span>
-                          {isFilled && (
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full ${
-                                isActive ? "bg-[#FFDD00]" : "bg-emerald-500"
-                              }`}
-                            />
-                          )}
-                        </button>
-
-                        {slidesList.length > 1 && (
-                          <button
-                            type="button"
-                            title={`Hapus Slide ${idx + 1}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRemoveSlide(idx);
-                            }}
-                            className={`pr-2 pl-0.5 text-xs font-black cursor-pointer hover:opacity-80 transition ${
-                              isActive ? "text-[#FFDD00] hover:text-white" : "text-slate-400 hover:text-rose-500"
-                            }`}
-                          >
-                            ×
-                          </button>
-                        )}
-                      </div>
+                          {charLen}/350
+                        </span>
+                      </button>
                     );
                   })}
-
-                  {slidesList.length < MAX_SLIDES && (
-                    <button
-                      type="button"
-                      onClick={handleAddSlide}
-                      className="px-2.5 py-1.5 rounded-xl border border-dashed border-[#006569]/40 hover:border-[#006569] text-[#006569] hover:bg-[#E6F4F1] text-xs font-bold flex items-center gap-1 transition cursor-pointer shrink-0"
-                    >
-                      <Plus className="w-3 h-3" />
-                      <span>Slide Baru</span>
-                    </button>
-                  )}
                 </div>
               </div>
 
-              {/* Message Textarea for Current Slide */}
+              {/* Message Textarea with Live Auto-Paging */}
               <div className="bg-[#f8faf9] rounded-2xl p-3 sm:p-3.5 px-3.5 sm:px-4 border border-slate-200 focus-within:border-[#006569] focus-within:bg-white transition space-y-2">
                 <div className="flex items-center justify-between text-xs text-slate-500">
-                  <span className="font-extrabold uppercase tracking-wider text-[10px] sm:text-[10.5px] text-slate-700">
-                    Isi Pesan — Halaman {activeSlideTab + 1}
-                  </span>
-                  <span className="font-mono text-[10.5px] text-slate-400">
-                    {(slidesList[activeSlideTab] || "").length} / {CHARS_PER_SLIDE}
-                  </span>
-                </div>
-                <textarea
-                  ref={messageTextareaRef}
-                  id="message-textarea"
-                  rows={4}
-                  value={slidesList[activeSlideTab] || ""}
-                  onChange={(e) => handleSlideChange(activeSlideTab, e.target.value)}
-                  placeholder={
-                    activeSlideTab === 0
-                      ? "Ketik curhatan, salam kenal, atau pesan rahasia untuk Slide 1... Mau pesan bersambung? Klik '+ Tambah Slide' di atas (bisa 2 s/d 5 slide)!"
-                      : `Lanjutkan pesan untuk Slide ${activeSlideTab + 1} di sini...`
-                  }
-                  className="w-full bg-transparent text-sm text-slate-900 placeholder-slate-400 focus:outline-none resize-none leading-relaxed"
-                />
-
-                {/* Quick Slide Navigation Row */}
-                <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 text-xs">
-                  <div>
-                    {activeSlideTab > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => switchActiveSlide(activeSlideTab - 1)}
-                        className="text-[11px] font-bold text-[#006569] hover:underline flex items-center gap-0.5 cursor-pointer"
-                      >
-                        <ChevronLeft className="w-3.5 h-3.5" />
-                        <span>Ke Slide {activeSlideTab}</span>
-                      </button>
-                    )}
-                  </div>
-
-                  <div>
-                    {activeSlideTab < slidesList.length - 1 ? (
-                      <button
-                        type="button"
-                        onClick={() => switchActiveSlide(activeSlideTab + 1)}
-                        className="text-[11px] font-bold text-[#006569] hover:underline flex items-center gap-0.5 cursor-pointer"
-                      >
-                        <span>Ke Slide {activeSlideTab + 2}</span>
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </button>
-                    ) : slidesList.length < MAX_SLIDES ? (
-                      <button
-                        type="button"
-                        onClick={handleAddSlide}
-                        className="text-[11px] font-bold text-[#006569] bg-[#E6F4F1] hover:bg-[#d4ede7] px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer transition border border-[#006569]/20"
-                      >
-                        <Plus className="w-3 h-3" />
-                        <span>Tambah Slide {slidesList.length + 1}</span>
-                      </button>
-                    ) : (
-                      <span className="text-[10px] text-slate-400 font-semibold">
-                        Maksimal 5 slide
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-extrabold uppercase tracking-wider text-[10px] sm:text-[10.5px] text-slate-700">
+                      Isi Pesan Menfess
+                    </span>
+                    {slideCount > 1 && (
+                      <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.2 rounded border border-emerald-200">
+                        Slide {previewSlideIdx + 1} aktif di preview
                       </span>
                     )}
                   </div>
+                  <div className="flex items-center gap-2 font-mono text-[10.5px]">
+                    <span className="text-slate-400">Total: {message.length}/{MAX_CHARS}</span>
+                  </div>
                 </div>
+
+                <textarea
+                  ref={messageTextareaRef}
+                  id="message-textarea"
+                  rows={5}
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder="Ketik curhatan, uneg-uneg, salam kenal, atau pesan rahasiamu di sini... Jika pesanmu lebih dari 350 karakter, sistem akan OTOMATIS memotongnya menjadi slide baru rapi tanpa kata terpotong!"
+                  className="w-full bg-transparent text-sm text-slate-900 placeholder-slate-400 focus:outline-none resize-none leading-relaxed"
+                />
+
+                {/* Auto-Slide Info / Helper Banner */}
+                {slideCount > 1 ? (
+                  <div className="p-2.5 rounded-xl bg-[#E6F4F1] border border-[#006569]/30 text-[#006569] text-xs flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-[#006569] shrink-0" />
+                      <span className="text-[11px] font-semibold leading-tight">
+                        Otomatis dibagi menjadi <b>{slideCount} Slide Carousel</b> (maks. 350 karakter/slide).
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        disabled={previewSlideIdx === 0}
+                        onClick={() => setPreviewSlideIdx((prev) => Math.max(0, prev - 1))}
+                        className="p-1 rounded bg-white border border-[#006569]/20 disabled:opacity-30 cursor-pointer text-[#006569]"
+                      >
+                        <ChevronLeft className="w-3 h-3" />
+                      </button>
+                      <span className="text-[10.5px] font-bold px-1 text-[#006569]">
+                        {previewSlideIdx + 1}/{slideCount}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={previewSlideIdx === slideCount - 1}
+                        onClick={() => setPreviewSlideIdx((prev) => Math.min(slideCount - 1, prev + 1))}
+                        className="p-1 rounded bg-white border border-[#006569]/20 disabled:opacity-30 cursor-pointer text-[#006569]"
+                      >
+                        <ChevronRight className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-200/60">
+                    <span>✨ Otomatis membuat slide baru jika melebihi 350 karakter</span>
+                    <span>{message.length} / 350 (Slide 1)</span>
+                  </div>
+                )}
               </div>
 
               {/* Mobile Quick Switcher to Preview */}
@@ -958,20 +911,24 @@ export default function MenfessPage() {
 
                         {/* Center Card */}
                         <div className="bg-[#001a1c]/80 border border-[#FFDD00]/40 rounded-xl p-2.5 sm:p-3 my-1.5 sm:my-2 flex-1 flex flex-col justify-between overflow-hidden">
-                          {/* Top Meta */}
-                          <div className="flex items-center justify-between pb-1 border-b border-[#FFDD00]/25 text-[10px]">
-                            <div className="flex items-center gap-1.5 truncate">
-                              <span className="bg-[#FFDD00] text-black font-black px-1.5 py-0.2 rounded text-[8.5px]">TO:</span>
-                              <span className="font-bold text-white truncate max-w-[100px] sm:max-w-[140px]">{recipient || "Anyone @ UNJ"}</span>
-                              <span className="bg-[#006569] text-[#7eece4] border border-[#7eece4]/40 font-black px-1.5 py-0.2 rounded text-[8.5px] ml-1">FROM:</span>
-                              <span className="font-medium text-[#D1FAE5] truncate max-w-[90px] sm:max-w-[120px]">{sender || "Secret Admirer"}</span>
+                          {/* Top Meta (Responsive pill badges without truncate/ellipsis) */}
+                          <div className="flex flex-wrap items-center justify-between gap-1.5 pb-2 border-b border-[#FFDD00]/25 text-[11px] sm:text-xs">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <div className="flex items-center gap-1 bg-[#FFDD00] text-black px-2 py-0.5 rounded font-black text-[10px] sm:text-[11px] shrink-0">
+                                <span>TO:</span>
+                                <span className="font-bold text-slate-900">{recipient.trim() || "Anyone @ UNJ"}</span>
+                              </div>
+                              <div className="flex items-center gap-1 bg-[#006569] text-[#7eece4] border border-[#7eece4]/40 px-2 py-0.5 rounded font-black text-[10px] sm:text-[11px] shrink-0">
+                                <span>FROM:</span>
+                                <span className="font-bold text-[#D1FAE5]">{sender.trim() || "Secret Admirer"}</span>
+                              </div>
                             </div>
-                            <span className="text-[#FFDD00] font-serif text-lg leading-none opacity-80">“</span>
+                            <span className="text-[#FFDD00] font-serif text-lg leading-none opacity-80 shrink-0">“</span>
                           </div>
 
-                          {/* Message Body */}
-                          <div className="my-auto py-1.5 max-h-[170px] overflow-y-auto">
-                            <p className="text-xs sm:text-sm font-semibold text-white leading-relaxed whitespace-pre-line">
+                          {/* Message Body (Auto-fitting without overflow or scrollbars) */}
+                          <div className="my-auto py-2 flex-1 flex flex-col justify-center min-h-0 overflow-hidden">
+                            <p className={`${getPreviewFontSize(currentPreviewText)} font-semibold text-white break-words whitespace-pre-line`}>
                               {currentPreviewText}
                             </p>
                           </div>
@@ -1015,20 +972,24 @@ export default function MenfessPage() {
 
                         {/* Center Card */}
                         <div className="bg-white border-2 border-black shadow-[3px_3px_0px_#000] rounded-xl p-2.5 sm:p-3 my-1.5 sm:my-2 flex-1 flex flex-col justify-between overflow-hidden">
-                          {/* Top Meta */}
-                          <div className="flex items-center justify-between pb-1 border-b-2 border-black text-[10px]">
-                            <div className="flex items-center gap-1.5 truncate">
-                              <span className="bg-[#FFDD00] text-black font-black px-1.5 py-0.2 rounded border border-black text-[8.5px]">TO:</span>
-                              <span className="font-black text-slate-900 truncate max-w-[100px] sm:max-w-[140px]">{recipient || "Anyone @ UNJ"}</span>
-                              <span className="bg-[#006569] text-white font-black px-1.5 py-0.2 rounded border border-black text-[8.5px] ml-1">FROM:</span>
-                              <span className="font-bold text-slate-700 truncate max-w-[90px] sm:max-w-[120px]">{sender || "Secret Admirer"}</span>
+                          {/* Top Meta (Responsive pill badges without truncate/ellipsis) */}
+                          <div className="flex flex-wrap items-center justify-between gap-1.5 pb-2 border-b-2 border-black text-[11px] sm:text-xs">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <div className="flex items-center gap-1 bg-[#FFDD00] text-black px-2 py-0.5 rounded border-2 border-black font-black text-[10px] sm:text-[11px] shadow-[1px_1px_0px_#000] shrink-0">
+                                <span>TO:</span>
+                                <span className="font-black text-slate-900">{recipient.trim() || "Anyone @ UNJ"}</span>
+                              </div>
+                              <div className="flex items-center gap-1 bg-[#006569] text-white px-2 py-0.5 rounded border-2 border-black font-black text-[10px] sm:text-[11px] shadow-[1px_1px_0px_#000] shrink-0">
+                                <span className="text-[#FFDD00]">FROM:</span>
+                                <span className="font-extrabold text-white">{sender.trim() || "Secret Admirer"}</span>
+                              </div>
                             </div>
-                            <span className="bg-[#FFDD00] text-black font-black text-[8px] px-1 rounded border border-black">CONFESSION</span>
+                            <span className="bg-[#FFDD00] text-black font-black text-[9px] px-1.5 py-0.5 rounded border-2 border-black shrink-0">CONFESSION</span>
                           </div>
 
                           {/* Message Body */}
-                          <div className="my-auto py-1.5 max-h-[170px] overflow-y-auto">
-                            <p className="text-xs sm:text-sm font-black text-slate-900 leading-relaxed whitespace-pre-line">
+                          <div className="my-auto py-2 flex-1 flex flex-col justify-center min-h-0 overflow-hidden">
+                            <p className={`${getPreviewFontSize(currentPreviewText)} font-black text-slate-900 break-words whitespace-pre-line`}>
                               {currentPreviewText}
                             </p>
                           </div>
@@ -1076,23 +1037,27 @@ export default function MenfessPage() {
 
                         {/* Center Card */}
                         <div className="bg-[#002428]/90 border border-[#3ee8df] rounded-xl p-2.5 sm:p-3 my-1.5 sm:my-2 flex-1 flex flex-col justify-between overflow-hidden">
-                          {/* Top Meta */}
-                          <div className="flex items-center justify-between pb-1 border-b border-[#008F94] text-[9px] sm:text-[10px]">
-                            <div className="flex items-center gap-1.5 truncate">
-                              <span className="text-slate-400">&gt; TARGET:</span>
-                              <span className="text-white font-bold truncate max-w-[100px] sm:max-w-[140px]">{recipient || "UNKNOWN"}</span>
-                              <span className="text-slate-400 ml-1">&gt; SENDER:</span>
-                              <span className="text-[#FFDD00] font-bold truncate max-w-[90px] sm:max-w-[120px]">{sender || "ENCRYPTED"}</span>
+                          {/* Top Meta (Responsive pill badges without truncate/ellipsis) */}
+                          <div className="flex flex-wrap items-center justify-between gap-1.5 pb-2 border-b border-[#008F94] text-[11px] sm:text-xs font-mono">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <div className="flex items-center gap-1 bg-[#002428] border border-[#3ee8df] px-2 py-0.5 rounded text-[10px] sm:text-[11px] shrink-0">
+                                <span className="text-[#3ee8df] font-bold">&gt; TARGET:</span>
+                                <span className="text-white font-bold">{recipient.trim() || "UNKNOWN"}</span>
+                              </div>
+                              <div className="flex items-center gap-1 bg-[#002428] border border-[#FFDD00] px-2 py-0.5 rounded text-[10px] sm:text-[11px] shrink-0">
+                                <span className="text-[#FFDD00] font-bold">&gt; SENDER:</span>
+                                <span className="text-[#FFDD00] font-bold">{sender.trim() || "ENCRYPTED"}</span>
+                              </div>
                             </div>
-                            <span className="text-[#3ee8df] text-[8px] font-bold">SECURE</span>
+                            <span className="text-[#3ee8df] text-[9px] font-bold border border-[#008F94] px-1 rounded shrink-0">SECURE</span>
                           </div>
 
                           {/* Message Body */}
-                          <div className="my-auto py-1.5 max-h-[165px] overflow-y-auto">
+                          <div className="my-auto py-2 flex-1 flex flex-col justify-center min-h-0 overflow-hidden font-mono">
                             <span className="text-[#FFDD00] font-bold block mb-0.5 text-[8.5px]">
                               // MESSAGE_DECRYPTED:
                             </span>
-                            <p className="text-xs sm:text-sm text-[#c2fff5] leading-relaxed whitespace-pre-line font-mono">
+                            <p className={`${getPreviewFontSize(currentPreviewText)} text-[#c2fff5] break-words whitespace-pre-line`}>
                               {currentPreviewText}
                             </p>
                           </div>
@@ -1136,20 +1101,24 @@ export default function MenfessPage() {
 
                         {/* Center Card */}
                         <div className="bg-white rounded-xl p-2.5 sm:p-3 my-1.5 sm:my-2 border border-[#cbdad3] shadow-sm flex-1 flex flex-col justify-between overflow-hidden">
-                          {/* Top Meta */}
-                          <div className="flex items-center justify-between pb-1 border-b border-dashed border-[#cbdad3] text-[9.5px]">
-                            <div className="flex items-center gap-1.5 truncate">
-                              <span className="text-slate-400 font-bold">Dear:</span>
-                              <span className="font-bold text-[#006569] truncate max-w-[100px] sm:max-w-[140px]">{recipient || "Anyone @ UNJ"}</span>
-                              <span className="text-slate-400 font-bold ml-1">From:</span>
-                              <span className="font-semibold text-slate-600 truncate max-w-[90px] sm:max-w-[120px]">{sender || "Secret Admirer"}</span>
+                          {/* Top Meta (Responsive pill badges without truncate/ellipsis) */}
+                          <div className="flex flex-wrap items-center justify-between gap-1.5 pb-2 border-b border-dashed border-[#cbdad3] text-[11px] sm:text-xs">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <div className="flex items-center gap-1 bg-white border border-[#cbdad3] px-2 py-0.5 rounded text-[10px] sm:text-[11px] shrink-0">
+                                <span className="text-slate-500 font-extrabold">Dear:</span>
+                                <span className="font-black text-[#006569]">{recipient.trim() || "Anyone @ UNJ"}</span>
+                              </div>
+                              <div className="flex items-center gap-1 bg-[#EBF5F0] border border-[#9fc4b5] px-2 py-0.5 rounded text-[10px] sm:text-[11px] shrink-0">
+                                <span className="text-slate-500 font-extrabold">From:</span>
+                                <span className="font-bold text-slate-700">{sender.trim() || "Secret Admirer"}</span>
+                              </div>
                             </div>
-                            <span className="text-[8px] bg-slate-100 px-1 rounded text-slate-600 font-bold">NOTES</span>
+                            <span className="text-[9px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 font-bold shrink-0">NOTES</span>
                           </div>
 
                           {/* Message Body */}
-                          <div className="my-auto py-1.5 max-h-[170px] overflow-y-auto">
-                            <p className="text-xs sm:text-sm text-slate-800 leading-relaxed whitespace-pre-line font-medium">
+                          <div className="my-auto py-2 flex-1 flex flex-col justify-center min-h-0 overflow-hidden">
+                            <p className={`${getPreviewFontSize(currentPreviewText)} text-slate-800 break-words whitespace-pre-line font-medium`}>
                               {currentPreviewText}
                             </p>
                           </div>
@@ -1186,7 +1155,7 @@ export default function MenfessPage() {
                     </button>
 
                     <div className="flex items-center gap-1">
-                      {slidesList.map((_, i) => (
+                      {slides.map((_, i) => (
                         <div
                           key={i}
                           onClick={() => setPreviewSlideIdx(i)}

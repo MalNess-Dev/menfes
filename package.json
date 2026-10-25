@@ -11,6 +11,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "worker": "tsx watch src/worker/index.ts",
+    "worker:prod": "tsx src/worker/index.ts",
     "admin": "tsx scripts/admin.ts",
     "pdf": "python scripts/generate_feature_list_pdf.py"
   },

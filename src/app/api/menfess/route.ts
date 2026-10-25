@@ -113,9 +113,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 7. Calculate Slide Segmentation for Carousel (Max 5 slides)
+    // 7. Calculate Slide Segmentation for Carousel (Max 10 slides)
     const slides = splitMessageIntoSlides(trimmedMessage);
-    const slideCount = Math.min(slides.length, 5);
+    const slideCount = Math.min(slides.length, 10);
 
     // 8. Save Menfess to SQLite Queue (Raw IP encrypted via HMAC-SHA256)
     const selectedTemplate = ["comic", "unj-classic", "cyber", "scrapbook"].includes(template)

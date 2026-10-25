@@ -13,7 +13,9 @@ async function main() {
     .select({ status: menfess.status, total: count() })
     .from(menfess)
     .groupBy(menfess.status);
-  const byStatus = new Map(counts.map((row) => [row.status, row.total]));
+  const byStatus = new Map<string, number>(
+    counts.map((row: { status: string; total: number }) => [row.status, Number(row.total)])
+  );
   const pending = byStatus.get("pending") ?? 0;
   const processing = byStatus.get("processing") ?? 0;
   const published = byStatus.get("published") ?? 0;
