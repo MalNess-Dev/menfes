@@ -1,21 +1,24 @@
 import dotenv from "dotenv";
 import path from "path";
+import { count } from "drizzle-orm";
 
 // Load environment variables
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
-import { prisma, ensureWalMode } from "../src/lib/prisma";
+import { db, closeDatabase } from "../src/lib/db";
+import { menfess } from "../src/lib/schema";
 
 async function main() {
-  await ensureWalMode();
-
-  const [pending, processing, published, failed, rejected] = await Promise.all([
-    prisma.menfess.count({ where: { status: "pending" } }),
-    prisma.menfess.count({ where: { status: "processing" } }),
-    prisma.menfess.count({ where: { status: "published" } }),
-    prisma.menfess.count({ where: { status: "failed" } }),
-    prisma.menfess.count({ where: { status: "rejected" } }),
-  ]);
+  const counts = await db
+    .select({ status: menfess.status, total: count() })
+    .from(menfess)
+    .groupBy(menfess.status);
+  const byStatus = new Map(counts.map((row) => [row.status, row.total]));
+  const pending = byStatus.get("pending") ?? 0;
+  const processing = byStatus.get("processing") ?? 0;
+  const published = byStatus.get("published") ?? 0;
+  const failed = byStatus.get("failed") ?? 0;
+  const rejected = byStatus.get("rejected") ?? 0;
 
   console.log("\n=======================================================");
   console.log("📨 Status Antrean IG Menfess");
@@ -34,5 +37,5 @@ main()
     process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await closeDatabase();
   });

@@ -1,10 +1,12 @@
 import dotenv from "dotenv";
 import path from "path";
+import { eq } from "drizzle-orm";
 
 // Load .env.local first, then fallback to .env
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
-import { prisma } from "../lib/prisma";
+import { db, toSqliteDateTime } from "../lib/db";
+import { menfess } from "../lib/schema";
 import {
   recoverHangingJobs,
   getNextPendingMenfess,
@@ -126,10 +128,7 @@ async function runWorker() {
 
     // Lock job into 'processing'
     try {
-      await prisma.menfess.update({
-        where: { id: job.id },
-        data: { status: "processing" },
-      });
+      await db.update(menfess).set({ status: "processing" }).where(eq(menfess.id, job.id));
     } catch (err) {
       console.error(`[Worker] Gagal mengupdate status ke processing untuk #${job.id}:`, err);
       await sleep(5000);
@@ -168,16 +167,16 @@ async function runWorker() {
       }
 
       // 4. Update status to 'published'
-      await prisma.menfess.update({
-        where: { id: job.id },
-        data: {
+      await db
+        .update(menfess)
+        .set({
           status: "published",
           igMediaId: mediaId,
           slideCount: totalSlides,
-          publishedAt: new Date(),
+          publishedAt: toSqliteDateTime(),
           errorMessage: null,
-        },
-      });
+        })
+        .where(eq(menfess.id, job.id));
 
       console.log(`✅ [Worker] Menfess #${job.id} BERHASIL diposting! Media ID: ${mediaId}`);
     } catch (error: unknown) {
@@ -211,14 +210,14 @@ async function runWorker() {
       const nextRetry = job.retryCount + 1;
       const willFailPermanently = nextRetry >= 3 || isCheckpointError;
 
-      await prisma.menfess.update({
-        where: { id: job.id },
-        data: {
+      await db
+        .update(menfess)
+        .set({
           retryCount: nextRetry,
           status: willFailPermanently ? "failed" : "pending",
           errorMessage: isCheckpointError ? haltMessage : err.message || "Error saat pemrosesan",
-        },
-      });
+        })
+        .where(eq(menfess.id, job.id));
 
       if (isCheckpointError) {
         process.exit(1);

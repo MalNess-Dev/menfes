@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { prisma, ensureWalMode } from "@/lib/prisma";
+import { db } from "@/lib/db";
+import { menfess } from "@/lib/schema";
 import { hashIp, checkSessionAndIpLimit } from "@/lib/ratelimit";
 import { splitMessageIntoSlides } from "@/lib/slides";
 import { getClientIp, parseDeviceType } from "@/lib/security";
 
 export async function POST(request: NextRequest) {
   try {
-    await ensureWalMode();
-
     // 1. Extract Real Client IP (Spoof-resistant)
     const clientIp = getClientIp(request);
     const userAgent = request.headers.get("user-agent") || "";
@@ -123,8 +122,9 @@ export async function POST(request: NextRequest) {
       ? template
       : "unj-classic";
 
-    const newMenfess = await prisma.menfess.create({
-      data: {
+    const [newMenfess] = await db
+      .insert(menfess)
+      .values({
         recipient: recipient?.trim() || null,
         sender: sender?.trim() || null, // Display alias on Instagram (e.g. Secret Admirer)
         message: trimmedMessage,
@@ -133,8 +133,12 @@ export async function POST(request: NextRequest) {
         senderIp: hashedIp, // Encrypted salted hash to protect sender privacy and owner data
         senderDevice: `${deviceType} | template:${selectedTemplate}`,
         senderUserAgent: userAgent.slice(0, 300),
-      },
-    });
+      })
+      .returning();
+
+    if (!newMenfess) {
+      throw new Error("Menfess tidak dapat disimpan ke database.");
+    }
 
     const response = NextResponse.json(
       {

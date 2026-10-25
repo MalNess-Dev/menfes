@@ -1,4 +1,6 @@
-import { prisma, ensureWalMode } from "./prisma";
+import { and, asc, count, eq, gte, lt } from "drizzle-orm";
+import { db, toSqliteDateTime } from "./db";
+import { botStatuses, menfess } from "./schema";
 
 export interface QueueOptions {
   minDelaySeconds: number;
@@ -29,27 +31,22 @@ export function isBotPaused(): boolean {
  * as specified in Section 6 of PRD.
  */
 export async function recoverHangingJobs(): Promise<number> {
-  await ensureWalMode();
-  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+  const tenMinutesAgo = toSqliteDateTime(new Date(Date.now() - 10 * 60 * 1000));
 
-  const stuckJobs = await prisma.menfess.updateMany({
-    where: {
-      status: "processing",
-      createdAt: {
-        lt: tenMinutesAgo,
-      },
-    },
-    data: {
+  const stuckJobs = await db
+    .update(menfess)
+    .set({
       status: "pending",
       errorMessage: "Recovered from hanging processing state upon restart.",
-    },
-  });
+    })
+    .where(and(eq(menfess.status, "processing"), lt(menfess.createdAt, tenMinutesAgo)))
+    .returning({ id: menfess.id });
 
-  if (stuckJobs.count > 0) {
-    console.log(`[Queue] Recovered ${stuckJobs.count} hanging jobs back to 'pending'.`);
+  if (stuckJobs.length > 0) {
+    console.log(`[Queue] Recovered ${stuckJobs.length} hanging jobs back to 'pending'.`);
   }
 
-  return stuckJobs.count;
+  return stuckJobs.length;
 }
 
 /**
@@ -59,28 +56,24 @@ export async function getTodayPublishedCount(): Promise<number> {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
 
-  return prisma.menfess.count({
-    where: {
-      status: "published",
-      publishedAt: {
-        gte: startOfDay,
-      },
-    },
-  });
+  const [result] = await db
+    .select({ value: count() })
+    .from(menfess)
+    .where(and(eq(menfess.status, "published"), gte(menfess.publishedAt, toSqliteDateTime(startOfDay))));
+  return result?.value ?? 0;
 }
 
 /**
  * Gets the next pending menfess message ordered by createdAt ascending (FIFO)
  */
 export async function getNextPendingMenfess() {
-  return prisma.menfess.findFirst({
-    where: {
-      status: "pending",
-    },
-    orderBy: {
-      createdAt: "asc",
-    },
-  });
+  const [job] = await db
+    .select()
+    .from(menfess)
+    .where(eq(menfess.status, "pending"))
+    .orderBy(asc(menfess.createdAt))
+    .limit(1);
+  return job;
 }
 
 /**
@@ -97,50 +90,49 @@ export function getRandomDelayMs(minSec: number, maxSec: number): number {
  * Gets current persistent bot status from database
  */
 export async function getBotStatus() {
-  await ensureWalMode();
-  return prisma.botStatus.upsert({
-    where: { id: 1 },
-    update: {},
-    create: { id: 1, isHalted: false },
-  });
+  await db.insert(botStatuses).values({ id: 1, isHalted: false }).onConflictDoNothing();
+  const [status] = await db.select().from(botStatuses).where(eq(botStatuses.id, 1));
+  return status;
 }
 
 /**
  * Records that the worker has halted due to critical checkpoint or login failure
  */
 export async function setBotHalted(reason: string) {
-  await ensureWalMode();
-  return prisma.botStatus.upsert({
-    where: { id: 1 },
-    update: {
-      isHalted: true,
-      haltReason: reason,
-      haltedAt: new Date(),
-    },
-    create: {
-      id: 1,
-      isHalted: true,
-      haltReason: reason,
-      haltedAt: new Date(),
-    },
-  });
+  const now = toSqliteDateTime();
+  await db
+    .insert(botStatuses)
+    .values({ id: 1, isHalted: true, haltReason: reason, haltedAt: now })
+    .onConflictDoUpdate({
+      target: botStatuses.id,
+      set: {
+        isHalted: true,
+        haltReason: reason,
+        haltedAt: now,
+        updatedAt: now,
+      },
+    });
+  const [status] = await db.select().from(botStatuses).where(eq(botStatuses.id, 1));
+  return status;
 }
 
 /**
  * Clears the halted status so the worker can resume processing
  */
 export async function clearBotHalted() {
-  await ensureWalMode();
-  return prisma.botStatus.upsert({
-    where: { id: 1 },
-    update: {
-      isHalted: false,
-      haltReason: null,
-      haltedAt: null,
-    },
-    create: {
-      id: 1,
-      isHalted: false,
-    },
-  });
+  const now = toSqliteDateTime();
+  await db
+    .insert(botStatuses)
+    .values({ id: 1, isHalted: false })
+    .onConflictDoUpdate({
+      target: botStatuses.id,
+      set: {
+        isHalted: false,
+        haltReason: null,
+        haltedAt: null,
+        updatedAt: now,
+      },
+    });
+  const [status] = await db.select().from(botStatuses).where(eq(botStatuses.id, 1));
+  return status;
 }

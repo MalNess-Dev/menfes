@@ -3,7 +3,9 @@ import {
   IgCheckpointError,
   IgLoginRequiredError,
 } from "instagram-private-api";
-import { prisma } from "./prisma";
+import { eq } from "drizzle-orm";
+import { db, toSqliteDateTime } from "./db";
+import { igSessions } from "./schema";
 import sharp from "sharp";
 
 export { IgCheckpointError, IgLoginRequiredError };
@@ -29,7 +31,7 @@ async function getAuthenticatedClient(): Promise<IgApiClient> {
   const ig = new IgApiClient();
   ig.state.generateDevice(username);
   try {
-    const savedSession = await prisma.igSession.findUnique({ where: { id: 1 } });
+    const [savedSession] = await db.select().from(igSessions).where(eq(igSessions.id, 1));
     if (savedSession?.sessionData) {
       await ig.state.deserialize(JSON.parse(savedSession.sessionData));
       await ig.user.info(ig.state.cookieUserId);
@@ -46,11 +48,14 @@ async function getAuthenticatedClient(): Promise<IgApiClient> {
     console.log(`[Instagram API] Login berhasil sebagai @${username}`);
     const serialized = await ig.state.serialize();
     delete (serialized as Record<string, unknown>).constants;
-    await prisma.igSession.upsert({
-      where: { id: 1 },
-      update: { sessionData: JSON.stringify(serialized) },
-      create: { id: 1, sessionData: JSON.stringify(serialized) },
-    });
+    const now = toSqliteDateTime();
+    await db
+      .insert(igSessions)
+      .values({ id: 1, sessionData: JSON.stringify(serialized), updatedAt: now })
+      .onConflictDoUpdate({
+        target: igSessions.id,
+        set: { sessionData: JSON.stringify(serialized), updatedAt: now },
+      });
     cachedIgClient = ig;
     return ig;
   } catch (err: unknown) {
