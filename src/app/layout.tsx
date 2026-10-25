@@ -9,9 +9,20 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Simple IG Menfess — Kirim Pesan Menfess Elegan & Anonim",
+  title: "UNJ Menfess — Kirim Menfess Sesukamu di Universitas Negeri Jakarta",
   description:
-    "Kirim pesan menfess anonim ke Instagram secara otomatis. Tanpa filter konten, publik, dan diposting dalam format slide carousel estetis.",
+    "Wadah aspirasi, curahan hati, dan salam rahasia mahasiswa Universitas Negeri Jakarta (UNJ). 100% anonim, tanpa login, otomatis diposting rapi ke Instagram.",
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "32x32" },
+      { url: "/icon-32.png", sizes: "32x32", type: "image/png" },
+    ],
+    shortcut: "/icon.svg",
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
 };
 
 export default function RootLayout({
@@ -22,6 +33,9 @@ export default function RootLayout({
   return (
     <html lang="id" className={`${inter.variable} h-full antialiased`}>
       <head>
+        <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+        <link rel="alternate icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <Script
           src="https://challenges.cloudflare.com/turnstile/v0/api.js"
           strategy="afterInteractive"

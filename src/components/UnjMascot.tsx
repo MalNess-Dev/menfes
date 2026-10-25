@@ -10,12 +10,12 @@ interface UnjMascotProps {
 }
 
 const UNJ_QUOTES = [
-  "Hai anak UNJ! Mau titip salam atau curhat nih? 🐥💛",
-  "Tarik & geser aku ke mana aja ya, aku bisa terbang! ✨",
+  "Kamu takut bersuara di UNJ? Send menfess aja, 100% anonim! 📣✨",
+  "Punya unek-unek fasilitas kampus atau dosen? Suarakan di sini! 📢",
   "Tenang, identitas aslimu aman terenkripsi rahasia! 🔒",
-  "Salam buat anak FBS, FT, FMIPA, FIP, FIS, FE, FIK, FPPsi? 🎓",
-  "Ketik panjang juga boleh, otomatis jadi carousel rapi! 📑",
-  "Semoga crush kamu di kampus Rawamangun peka ya! 💛",
+  "Salam buat anak FBS, FT, FMIPA, FIP, FIS, FE, FIK, FPPsi! 🎓",
+  "Ketik panjang juga bebas, otomatis jadi carousel rapi! 📑",
+  "Tarik & geser aku ke mana aja ya, aku nemenin kamu bersuara! 🐥💛",
 ];
 
 export default function UnjMascot({
@@ -31,7 +31,8 @@ export default function UnjMascot({
   const [scale, setScale] = useState(1);
   const [quoteIdx, setQuoteIdx] = useState(0);
   const [speechText, setSpeechText] = useState(UNJ_QUOTES[0]);
-  const [showSpeech, setShowSpeech] = useState(true);
+  // Default: hidden, only appears when clicked by user!
+  const [showSpeech, setShowSpeech] = useState(false);
 
   // Eye pupil tracking
   const [pupilOffset, setPupilOffset] = useState({ x: 0, y: 0 });
@@ -41,17 +42,16 @@ export default function UnjMascot({
   const mascotRef = useRef<HTMLDivElement>(null);
   const lastXRef = useRef(0);
 
-  // Initialize initial position on mount (clearly visible, floating comfortably)
+  // Initialize initial position on mount (clearly visible, floating safely inside screen)
   useEffect(() => {
     if (typeof window !== "undefined") {
       const isMobile = window.innerWidth < 640;
-      // Position clearly visible: mobile ~110px from right, desktop ~185px from right
-      const defaultX = isMobile
-        ? Math.max(15, window.innerWidth - 115)
-        : Math.max(30, window.innerWidth - 190);
-      const defaultY = isMobile
-        ? Math.max(80, window.innerHeight - 195)
-        : Math.max(100, window.innerHeight - 250);
+      const mascotWidth = isMobile ? 44 : 64;
+      const mascotHeight = isMobile ? 50 : 72;
+
+      // Safe clearance from edges so mascot is NEVER cut off
+      const defaultX = Math.max(12, window.innerWidth - mascotWidth - (isMobile ? 20 : 36));
+      const defaultY = Math.max(70, window.innerHeight - mascotHeight - (isMobile ? 90 : 120));
 
       setPosition({ x: defaultX, y: defaultY });
       lastXRef.current = defaultX;
@@ -82,31 +82,9 @@ export default function UnjMascot({
     return () => window.removeEventListener("mousemove", handleMouseMove);
   }, []);
 
-  // Dynamic reactions to typing
-  useEffect(() => {
-    if (mood === "submitting") {
-      setSpeechText("Bungkus surat menfessmu rapi-rapi... ⏳");
-      setShowSpeech(true);
-    } else if (mood === "happy") {
-      setSpeechText("YAY! Menfess kamu masuk antrean IG! 🎉✨");
-      setShowSpeech(true);
-    } else if (messageText.trim().length > 450) {
-      setSpeechText("Wah curhatannya panjang! Jadi carousel rapi nih! 📑");
-      setShowSpeech(true);
-    } else if (messageText.trim().length > 10) {
-      setSpeechText("Lanjutin ngetik ya! Nanti aku antar ke IG~ 💌");
-      setShowSpeech(true);
-    } else if (recipientText.trim().length > 2) {
-      setSpeechText(`Cieee, buat "${recipientText.trim()}" ya? 🤫💛`);
-      setShowSpeech(true);
-    }
-  }, [messageText, recipientText, mood]);
-
-  // Pointer drag handlers (touch & mouse)
+  // Pointer drag handlers (touch & mouse) with drag threshold for reliable click
   const handlePointerDown = (e: React.PointerEvent) => {
     if (!position) return;
-    setIsDragging(true);
-    setScale(1.08);
     dragStartRef.current = {
       mouseX: e.clientX,
       mouseY: e.clientY,
@@ -117,18 +95,28 @@ export default function UnjMascot({
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isDragging || !dragStartRef.current) return;
+    if (!dragStartRef.current) return;
 
     const deltaX = e.clientX - dragStartRef.current.mouseX;
     const deltaY = e.clientY - dragStartRef.current.mouseY;
 
+    // Only engage drag if moved beyond threshold (prevents tap from being swallowed)
+    if (!isDragging && (Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4)) {
+      setIsDragging(true);
+      setScale(1.08);
+    }
+
+    if (!isDragging) return;
+
     let newX = dragStartRef.current.startX + deltaX;
     let newY = dragStartRef.current.startY + deltaY;
 
-    // Viewport bounds (safe bounds on mobile and desktop)
+    // Viewport bounds (safe bounds on mobile and desktop - NEVER cut off)
     const isMobile = window.innerWidth < 640;
-    const maxX = window.innerWidth - (isMobile ? 85 : 105);
-    const maxY = window.innerHeight - (isMobile ? 95 : 120);
+    const mascotWidth = isMobile ? 44 : 64;
+    const mascotHeight = isMobile ? 50 : 72;
+    const maxX = window.innerWidth - mascotWidth - (isMobile ? 12 : 24);
+    const maxY = window.innerHeight - mascotHeight - (isMobile ? 24 : 40);
     newX = Math.max(12, Math.min(newX, maxX));
     newY = Math.max(50, Math.min(newY, maxY));
 
@@ -142,7 +130,11 @@ export default function UnjMascot({
   };
 
   const handlePointerUp = (e: React.PointerEvent) => {
-    if (isDragging) {
+    if (dragStartRef.current) {
+      if (!isDragging) {
+        // Clean tap/click detected!
+        handleClick();
+      }
       setIsDragging(false);
       setScale(1);
       setTilt(0);
@@ -156,15 +148,20 @@ export default function UnjMascot({
   };
 
   const handleClick = () => {
-    if (!isDragging) {
-      setQuoteIdx((prev) => (prev + 1) % UNJ_QUOTES.length);
+    // If hidden, show speech bubble; if already showing, cycle quote
+    setShowSpeech((prev) => {
+      if (!prev) return true;
+      setQuoteIdx((q) => (q + 1) % UNJ_QUOTES.length);
       setSpeechText(UNJ_QUOTES[(quoteIdx + 1) % UNJ_QUOTES.length]);
-      setShowSpeech(true);
-      if (onMascotClick) onMascotClick();
-    }
+      return true;
+    });
+    if (onMascotClick) onMascotClick();
   };
 
   if (!position) return null;
+
+  // Determine speech bubble anchor direction so it never overflows left or right edge
+  const isNearLeft = position.x < 160;
 
   return (
     <div
@@ -174,33 +171,59 @@ export default function UnjMascot({
         touchAction: "none",
         transition: isDragging ? "transform 0.05s ease-out" : "transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
       }}
-      className="fixed top-0 left-0 z-50 select-none cursor-grab active:cursor-grabbing flex flex-col items-center"
+      className="fixed top-0 left-0 z-50 select-none cursor-grab active:cursor-grabbing w-11 h-[50px] sm:w-16 sm:h-[72px]"
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
-      onClick={handleClick}
-      title="Chirpy UNJ • Tarik & geser aku! Klik untuk ngobrol 🐥"
+      title="Chirpy UNJ • Klik untuk ngobrol! Tarik & geser aku 🐥"
     >
-      {/* Interactive Speech Bubble */}
+      {/* Interactive Speech Bubble (ONLY SHOWN WHEN CLICKED) */}
       {showSpeech && (
-        <div className="relative mb-2 bg-white/95 backdrop-blur-md border border-[#006569]/30 rounded-2xl p-2.5 px-3.5 shadow-xl text-[10.5px] sm:text-xs font-bold text-slate-800 max-w-[160px] sm:max-w-[200px] text-center pointer-events-auto cursor-pointer animate-bubble leading-snug">
-          <p>{speechText}</p>
-          <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-white border-b border-r border-[#006569]/30 rotate-45" />
+        <div
+          className={`absolute bottom-full mb-2 ${
+            isNearLeft ? "left-0" : "right-0"
+          } bg-white/95 backdrop-blur-md border border-[#006569]/30 rounded-2xl p-2.5 px-3.5 shadow-xl text-[10px] sm:text-xs font-bold text-slate-800 w-max max-w-[150px] sm:max-w-[210px] text-left pointer-events-auto cursor-pointer animate-bubble leading-snug z-20`}
+          onClick={(e) => {
+            e.stopPropagation();
+            setQuoteIdx((q) => (q + 1) % UNJ_QUOTES.length);
+            setSpeechText(UNJ_QUOTES[(quoteIdx + 1) % UNJ_QUOTES.length]);
+          }}
+        >
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowSpeech(false);
+            }}
+            className={`absolute -top-1.5 ${
+              isNearLeft ? "-right-1.5" : "-left-1.5"
+            } w-4 h-4 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-full flex items-center justify-center text-[8px] font-bold shadow-sm`}
+            title="Tutup pesan"
+          >
+            ✕
+          </button>
+          <p className="pr-1">{speechText}</p>
+          {/* Arrow pointing down into Chirpy */}
+          <div
+            className={`absolute -bottom-1 ${
+              isNearLeft ? "left-4" : "right-4"
+            } w-2.5 h-2.5 bg-white border-b border-r border-[#006569]/30 rotate-45`}
+          />
         </div>
       )}
 
       {/* Dragging Motion Dust/Stars (visible while dragging) */}
       {isDragging && (
-        <div className="absolute -bottom-2 flex items-center gap-0.5 opacity-80 animate-pulse text-[10px]">
+        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-0.5 opacity-80 animate-pulse text-[10px]">
           <span className="text-[#FFDD00]">✦</span>
           <span>💨</span>
           <span className="text-[#FFDD00]">✦</span>
         </div>
       )}
 
-      {/* PURE VECTOR SVG MASCOT — PROMINENT & CUTE (w-16 h-18 on mobile, w-20 sm:h-24 on desktop) */}
-      <div className={`relative w-16 h-18 sm:w-20 sm:h-24 drop-shadow-[0_10px_22px_rgba(0,101,105,0.32)] group ${!isDragging ? "animate-float" : ""}`}>
+      {/* PURE VECTOR SVG MASCOT — COMPACT (w-full h-full matching container) */}
+      <div className={`relative w-full h-full drop-shadow-[0_4px_12px_rgba(0,101,105,0.25)] sm:drop-shadow-[0_10px_22px_rgba(0,101,105,0.32)] group ${!isDragging ? "animate-float" : ""}`}>
         <svg
           viewBox="0 0 160 180"
           className="w-full h-full overflow-visible"
@@ -345,7 +368,7 @@ export default function UnjMascot({
         </svg>
 
         {/* Small Floating Pill on Hover */}
-        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-[#006569] text-[#FFDD00] text-[8.5px] font-black px-2 py-0.2 rounded-full shadow border border-[#FFDD00]/50 whitespace-nowrap opacity-90">
+        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 bg-[#006569] text-[#FFDD00] text-[6.5px] sm:text-[8.5px] font-black px-1.5 py-0 sm:px-2 sm:py-0.5 rounded-full shadow border border-[#FFDD00]/50 whitespace-nowrap opacity-90 scale-90 sm:scale-100">
           Chirpy UNJ
         </div>
       </div>

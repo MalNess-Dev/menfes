@@ -24,6 +24,8 @@ import {
   Eye,
   PenTool,
   Plus,
+  Megaphone,
+  Lightbulb,
 } from "lucide-react";
 import UnjMascot from "@/components/UnjMascot";
 
@@ -202,6 +204,7 @@ export default function MenfessPage() {
     return () => clearInterval(interval);
   }, [turnstileSiteKey]);
 
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -286,8 +289,9 @@ export default function MenfessPage() {
     }
   };
 
-  const scrollToForm = () => {
-    document.getElementById("form-section")?.scrollIntoView({ behavior: "smooth" });
+
+  const scrollToSection = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
   };
 
   const currentPreviewText =
@@ -297,8 +301,8 @@ export default function MenfessPage() {
       : "Tuliskan pesan menfess kamu di form... Pesanmu akan tampil rapi sesuai template yang kamu pilih di sini!");
 
   return (
-    <div className="min-h-screen bg-[#f3f8f6] text-slate-800 font-sans antialiased selection:bg-[#006569] selection:text-white flex flex-col justify-between relative overflow-x-hidden">
-      
+    <div className="min-h-screen bg-white text-slate-800 font-sans antialiased selection:bg-[#006569] selection:text-white flex flex-col justify-between relative overflow-x-hidden">
+
       {/* ========================================================================= */}
       {/* INTERACTIVE DRAGGABLE SVG MASCOT (COMPACT FOR DESKTOP & MOBILE)          */}
       {/* ========================================================================= */}
@@ -309,12 +313,12 @@ export default function MenfessPage() {
       />
 
       {/* ========================================================================= */}
-      {/* 1. TOP NAVBAR (CLEAN, MINIMAL & MOBILE OPTIMIZED)                         */}
+      {/* TOP NAVBAR (CLEAN, MINIMAL & MOBILE OPTIMIZED)                            */}
       {/* ========================================================================= */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#006569]/15">
+      <header className="sticky top-0 z-40 bg-white border-b border-slate-100">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 h-15 sm:h-16 flex items-center">
           
-          {/* Brand Logo: UNJ MENFESS (Left Only, Right Empty) */}
+          {/* Brand Logo: UNJ MENFESS */}
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-[#006569] text-[#FFDD00] flex items-center justify-center font-black text-lg sm:text-xl shadow-md shadow-[#006569]/25 shrink-0">
               U
@@ -333,70 +337,133 @@ export default function MenfessPage() {
       </header>
 
       {/* ========================================================================= */}
-      {/* 2. SECTION 1: SPACIOUS HERO HEADLINE                                      */}
+      {/* 1. LAYAR 1: JUDUL UTAMA UNJ MENFESS (HERO VIEW)                           */}
       {/* ========================================================================= */}
-      <section className="min-h-[calc(100vh-64px)] flex flex-col justify-center items-center text-center px-4 sm:px-6 max-w-4xl mx-auto py-16 sm:py-24 space-y-6 sm:space-y-8">
+      {/* ========================================================================= */}
+      {/* 1. LAYAR 1: JUDUL UTAMA UNJ MENFESS (HERO VIEW)                           */}
+      {/* ========================================================================= */}
+      {/* ========================================================================= */}
+      {/* 1. LAYAR 1: JUDUL UTAMA UNJ MENFESS (HERO VIEW)                           */}
+      {/* ========================================================================= */}
+      <section id="hero-section" className="min-h-[calc(100vh-64px)] flex flex-col justify-center items-center text-center px-6 sm:px-8 max-w-4xl mx-auto py-12 sm:py-20 space-y-6 sm:space-y-8 relative z-10">
         
-        {/* Floating Pill */}
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#FFDD00] text-[#006569] font-black text-xs sm:text-sm shadow-sm transform hover:scale-105 transition">
-          <Sparkles className="w-4 h-4 text-[#006569]" />
-          <span>Ruang Curhat &amp; Salam #menfessunj</span>
-        </div>
-
-        {/* Main Big Headline */}
-        <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-[1.12]">
-          Kirim Menfess Sesukamu di{" "}
-          <span className="text-[#006569] block sm:inline">UNJ Menfess</span>
+        {/* Main Headline (Prominent, Structured & Grand) */}
+        <h1 className="flex flex-col items-center justify-center font-black tracking-tight max-w-4xl mx-auto">
+          <span className="text-[44px] xs:text-[50px] sm:text-6xl md:text-7xl lg:text-8xl text-slate-950 font-black leading-[1.05] tracking-tight">
+            Kirim Menfess
+          </span>
+          <span className="text-xl xs:text-2xl sm:text-3xl md:text-4xl text-slate-500 font-extrabold tracking-tight my-1 sm:my-2">
+            Sesukamu di
+          </span>
+          <span className="text-[40px] xs:text-[46px] sm:text-6xl md:text-7xl lg:text-8xl text-[#006569] font-black leading-[1.05] tracking-tight">
+            UNJ Menfess<span className="text-[#FFDD00]">.</span>
+          </span>
         </h1>
 
         {/* Subtitle */}
-        <p className="text-slate-600 text-sm sm:text-lg max-w-2xl leading-relaxed">
-          Sampaikan salam buat teman sekelas, kating, dosbing, atau crush di kampus tanpa ragu.
-          Bebas tanpa registrasi akun, otomatis dipecah rapi ke slide carousel Instagram dengan template estetik pilihanmu!
+        <p className="text-slate-600 text-sm sm:text-base md:text-lg max-w-xl leading-relaxed font-normal">
+          Wadah aspirasi, curahan hati, dan salam rahasia untuk seluruh mahasiswa dan civitas akademika Universitas Negeri Jakarta. Suarakan apapun tanpa rasa takut!
         </p>
 
-        {/* Scroll CTA Button & Downward Animated Prompt */}
-        <div className="pt-4 sm:pt-6 flex flex-col items-center gap-4">
+        {/* CTA Buttons */}
+        <div className="pt-2 sm:pt-4 flex flex-col sm:flex-row items-center justify-center gap-3 w-full sm:w-auto max-w-xs sm:max-w-none">
           <button
             type="button"
-            onClick={scrollToForm}
-            className="px-8 py-4 rounded-full bg-[#006569] hover:bg-[#004f52] active:scale-95 text-[#FFDD00] font-black text-sm sm:text-base shadow-xl shadow-[#006569]/25 flex items-center gap-3 transition cursor-pointer group"
+            onClick={() => scrollToSection("pesan-section")}
+            className="w-full sm:w-auto px-8 py-3.5 sm:py-4 rounded-full bg-[#006569] hover:bg-[#004f52] active:scale-95 text-[#FFDD00] font-black text-sm sm:text-base shadow-lg shadow-[#006569]/20 flex items-center justify-center gap-2.5 transition cursor-pointer group"
           >
-            <span>Mulai Tulis Menfess</span>
+            <span>Lanjut ke Pesan &amp; Motivasi</span>
             <ArrowDown className="w-4 h-4 group-hover:translate-y-1 transition text-[#FFDD00]" />
           </button>
-          
-          <div
-            onClick={scrollToForm}
-            className="flex flex-col items-center gap-1.5 text-xs text-slate-400 font-semibold cursor-pointer animate-bounce mt-2"
+
+          <button
+            type="button"
+            onClick={() => scrollToSection("form-section")}
+            className="w-full sm:w-auto px-8 py-3.5 sm:py-4 rounded-full bg-slate-50 hover:bg-slate-100 active:scale-95 text-slate-800 font-bold text-sm sm:text-base border border-slate-200 transition cursor-pointer"
           >
-            <span>Scroll ke bawah untuk mengisi pesan &amp; cek live preview</span>
-            <ChevronRight className="w-4 h-4 rotate-90 text-[#006569]" />
+            <span>Langsung Buat</span>
+          </button>
+        </div>
+
+        {/* Downward Animated Prompt */}
+        <div
+          onClick={() => scrollToSection("pesan-section")}
+          className="flex items-center gap-1.5 text-xs text-slate-400 font-semibold cursor-pointer animate-bounce mt-3 hover:text-[#006569] transition"
+        >
+          <span>Scroll ke bawah untuk membaca pesan</span>
+          <ChevronRight className="w-3.5 h-3.5 rotate-90 text-[#006569]" />
+        </div>
+
+      </section>
+
+      {/* ========================================================================= */}
+      {/* 2. LAYAR 2: PAS DI-SCROLL -> PESAN JANGAN TAKUT                           */}
+      {/* ========================================================================= */}
+      <section
+        id="pesan-section"
+        className="min-h-screen flex flex-col justify-center items-center text-center px-6 sm:px-8 max-w-4xl mx-auto py-20 sm:py-32 space-y-6 sm:space-y-8 border-t border-slate-100 relative z-10"
+      >
+        <div className="space-y-4 sm:space-y-6 max-w-3xl">
+          
+          {/* Badge */}
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#006569]/10 text-[#006569] font-black text-xs sm:text-sm border border-[#006569]/20 shadow-xs">
+            <Megaphone className="w-4 h-4 text-[#006569]" />
+            <span>Kamu Takut Bersuara di UNJ? Send Menfess Aja!</span>
+          </div>
+
+          {/* Headline */}
+          <h2 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-[1.18] break-words">
+            Jangan Takut untuk Keluarkan{" "}
+            <span className="text-[#006569] inline-block">Uneg-Uneg Kamu</span>{" "}
+            di UNJFess
+          </h2>
+
+          {/* Subtext */}
+          <p className="text-slate-600 text-sm sm:text-base md:text-lg leading-relaxed max-w-2xl mx-auto">
+            Punya unek-unek soal fasilitas kampus, kebijakan birokrasi, dosen, UKT, atau struggle perkuliahan tapi takut diintimidasi? <strong className="text-slate-900 font-bold">Jangan dipendam sendiri!</strong> Suarakan aspirasimu secara 100% anonim, aman tanpa registrasi, dan otomatis tayang rapi ke carousel Instagram UNJ.
+          </p>
+
+        </div>
+
+        {/* CTA Button */}
+        <div className="pt-2 sm:pt-4 flex flex-col items-center gap-3">
+          <button
+            type="button"
+            onClick={() => scrollToSection("form-section")}
+            className="px-9 py-4 rounded-full bg-[#FFDD00] hover:bg-[#ffe333] active:scale-95 text-[#006569] font-black text-sm sm:text-base shadow-xl shadow-[#FFDD00]/30 flex items-center justify-center gap-3 transition cursor-pointer group border-2 border-[#006569]/10"
+          >
+            <span>Tulis Menfess Sekarang</span>
+            <ArrowDown className="w-4 h-4 group-hover:translate-y-1 transition text-[#006569]" />
+          </button>
+
+          <div
+            onClick={() => scrollToSection("form-section")}
+            className="flex items-center gap-1.5 text-xs text-slate-400 font-semibold cursor-pointer animate-bounce mt-1 hover:text-[#006569] transition"
+          >
+            <span>Scroll ke bawah untuk form &amp; preview</span>
+            <ChevronRight className="w-3.5 h-3.5 rotate-90 text-[#006569]" />
           </div>
         </div>
 
       </section>
 
       {/* ========================================================================= */}
-      {/* 3. SECTION 2: FORM & LIVE PREVIEW (SETELAH DI-SCROLL, JARAK NYAMAN)       */}
+      {/* 3. LAYAR 3: PAS DI-SCROLL LAGI -> FORM TULIS & LIVE PREVIEW INSTAGRAM     */}
       {/* ========================================================================= */}
-      <section id="form-section" className="py-12 sm:py-24 px-4 sm:px-6 max-w-6xl mx-auto w-full border-t border-slate-200/80">
-        
+      <section id="form-section" className="min-h-screen py-16 sm:py-28 px-5 sm:px-8 lg:px-12 max-w-6xl mx-auto w-full border-t border-slate-100 relative z-10 flex flex-col justify-center">
+
         {/* Section Header */}
-        <div className="text-center space-y-2 mb-6 sm:mb-12">
-          <span className="text-[11px] font-extrabold uppercase tracking-widest text-[#006569] bg-[#E6F4F1] px-3.5 py-1 rounded-full border border-[#006569]/20">
-            Langkah 1 &amp; 2
-          </span>
-          <h2 className="text-2xl sm:text-3xl font-black text-slate-900">
-            Pilih Template &amp; Ketik Pesanmu
-          </h2>
-          <p className="text-xs sm:text-sm text-slate-500 max-w-xl mx-auto">
-            Hasil ketikanmu akan langsung muncul di live preview Instagram secara nyata dan diproses otomatis oleh sistem.
+        <div className="text-center space-y-2 mb-8 sm:mb-12">
+          <h3 className="text-2xl sm:text-3xl font-black text-slate-900">
+            Formulir &amp; Live Preview Menfess
+          </h3>
+          <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
+            Ketik pesanmu di kiri dan lihat hasilnya langsung pada mockup feed Instagram di kanan.
           </p>
         </div>
 
         {/* MOBILE VIEW SWITCHER (Segmented control) */}
-        <div className="lg:hidden grid grid-cols-2 p-1 bg-slate-200/90 rounded-2xl mb-5 border border-slate-300/70 shadow-inner">
+        <div className="lg:hidden grid grid-cols-2 p-1 bg-slate-200/90 rounded-2xl mb-8 border border-slate-300/70 shadow-inner">
           <button
             type="button"
             onClick={() => setMobileTab("form")}
@@ -435,20 +502,20 @@ export default function MenfessPage() {
           {/* LEFT COLUMN: THE FORM                                                 */}
           {/* ===================================================================== */}
           <div
-            className={`lg:col-span-7 bg-white rounded-3xl p-3.5 sm:p-8 border border-[#006569]/15 shadow-sm space-y-5 ${
+            className={`lg:col-span-7 bg-white rounded-3xl p-5 sm:p-8 border border-slate-200 shadow-sm space-y-5 ${
               mobileTab === "form" ? "block" : "hidden lg:block"
             }`}
           >
             
-            {/* Form Title & Template Section */}
-            <div className="space-y-3.5">
+            {/* Form Title & Top Controls */}
+            <div className="space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <div>
                   <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
-                    Tulis Menfess
+                    Tulis Menfess / Uneg-Uneg
                   </h3>
                   <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5">
-                    Pilih template &amp; ketik pesan di bawah.
+                    Pilih template postingan dan ketik pesanmu di bawah.
                   </p>
                 </div>
                 <span className="text-[10px] sm:text-[11px] font-bold text-[#006569] bg-[#E6F4F1] px-2.5 py-1 rounded-full border border-[#006569]/20 shrink-0">
@@ -456,7 +523,7 @@ export default function MenfessPage() {
                 </span>
               </div>
 
-              {/* TEMPLATE PICKER (Comic, UNJ Classic, Cyberpunk, Scrapbook) */}
+              {/* 1. TEMPLATE PICKER (Comic, UNJ Classic, Cyberpunk, Scrapbook) */}
               <div className="space-y-2">
                 <label className="block text-[10.5px] font-extrabold uppercase tracking-wider text-[#006569]">
                   Pilih Template Instagram:
@@ -737,25 +804,30 @@ export default function MenfessPage() {
               </div>
 
               {/* Mobile Quick Switcher to Preview */}
-              <div className="lg:hidden flex items-center justify-between p-2.5 sm:p-3 rounded-2xl bg-[#E6F4F1] border border-[#006569]/20 text-xs">
-                <div className="flex items-center gap-1.5 text-[#006569] font-bold text-[11px]">
-                  <span>Template:</span>
-                  <span className="bg-[#006569] text-[#FFDD00] px-2 py-0.5 rounded-full font-mono uppercase text-[10px]">
-                    {selectedTemplate}
-                  </span>
-                  <span className="text-slate-500 font-mono text-[10.5px]">
-                    ({slideCount} Slide)
-                  </span>
+              <button
+                type="button"
+                onClick={() => setMobileTab("preview")}
+                className="lg:hidden w-full p-3 rounded-2xl bg-[#E6F4F1] hover:bg-[#d4ede7] text-[#006569] border border-[#006569]/20 flex items-center justify-between transition cursor-pointer group"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-xl bg-[#006569] text-[#FFDD00] flex items-center justify-center font-bold text-xs shrink-0">
+                    <Eye className="w-4 h-4" />
+                  </div>
+                  <div className="text-left">
+                    <span className="block font-black text-xs leading-none text-[#006569]">
+                      Lihat Preview Instagram
+                    </span>
+                    <span className="text-[10.5px] text-slate-500 block mt-1">
+                      {TEMPLATES.find((t) => t.id === selectedTemplate)?.name || "UNJ Classic"} • {slideCount} Slide
+                    </span>
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setMobileTab("preview")}
-                  className="text-[#006569] font-black text-xs flex items-center gap-1 hover:underline cursor-pointer"
-                >
-                  <span>Lihat Preview</span>
+
+                <div className="flex items-center gap-1 text-[#006569] font-black text-xs bg-white px-3 py-1 rounded-full border border-[#006569]/20 shadow-2xs group-hover:translate-x-0.5 transition shrink-0">
+                  <span>Buka</span>
                   <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
+                </div>
+              </button>
 
               {/* Turnstile Container */}
               {turnstileSiteKey && (
@@ -798,7 +870,7 @@ export default function MenfessPage() {
             }`}
           >
             
-            <div className="bg-white rounded-[28px] border border-[#006569]/20 shadow-md overflow-hidden sticky top-24">
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden sticky top-24">
               
               {/* Preview Header Bar */}
               <div className="p-3.5 px-5 bg-[#006569] text-white flex items-center justify-between">
@@ -879,7 +951,7 @@ export default function MenfessPage() {
                               </span>
                             </div>
                           </div>
-                          <span className="font-bold text-[9px] sm:text-[10px] bg-[#FFDD00] text-[#006569] px-2 py-0.5 rounded-full">
+                          <span className="font-bold text-[8.5px] sm:text-[9.5px] bg-[#FFDD00] text-[#006569] px-2.5 py-0.5 rounded-full shadow-xs">
                             {slideCount > 1 ? `SLIDE ${previewSlideIdx + 1}/${slideCount}` : "OFFICIAL"}
                           </span>
                         </div>
@@ -906,7 +978,7 @@ export default function MenfessPage() {
 
                           {/* Card Footer */}
                           <div className="pt-1 border-t border-white/15 flex items-center justify-between text-[8px] sm:text-[9px]">
-                            <span className="text-[#94e8db]">Suara Mahasiswa UNJ • #menfessunj</span>
+                            <span className="text-[#94e8db] font-semibold">Suara Mahasiswa UNJ • #menfessunj</span>
                             <span className="text-[#FFDD00] font-serif text-sm leading-none opacity-80">”</span>
                           </div>
                         </div>
@@ -936,7 +1008,7 @@ export default function MenfessPage() {
                           <div className="bg-[#006569] text-[#FFDD00] font-black text-[10px] sm:text-xs px-2.5 py-0.5 rounded-lg border-2 border-black shadow-[2px_2px_0px_#000] tracking-wider uppercase">
                             UNJ MENFESS!
                           </div>
-                          <div className="bg-white text-black font-mono font-black text-[9.5px] sm:text-[10.5px] px-2 py-0.5 rounded-md border-2 border-black shadow-[2px_2px_0px_#000]">
+                          <div className="bg-white text-black font-mono font-black text-[9px] sm:text-[10px] px-2 py-0.5 rounded-md border-2 border-black shadow-[2px_2px_0px_#000]">
                             {slideCount > 1 ? `SLIDE ${previewSlideIdx + 1}/${slideCount}` : "POW!"}
                           </div>
                         </div>
@@ -1058,7 +1130,7 @@ export default function MenfessPage() {
                             UNJ CAMPUS NOTES
                           </div>
                           <span className="text-[9px] bg-white px-2 py-0.5 rounded-full border border-slate-300 font-mono text-[#006569] font-bold">
-                            {slideCount > 1 ? `SLIDE ${previewSlideIdx + 1}/${slideCount}` : "Memories"}
+                            {slideCount > 1 ? `SLIDE ${previewSlideIdx + 1}/${slideCount}` : "Uneg-Uneg"}
                           </span>
                         </div>
 
@@ -1162,21 +1234,42 @@ export default function MenfessPage() {
 
         </div>
 
+        {/* Scroll CTA Button & Prompt to Keunggulan & Footer */}
+        <div className="pt-10 sm:pt-14 flex flex-col items-center gap-2">
+          <button
+            type="button"
+            onClick={() => scrollToSection("keunggulan-section")}
+            className="px-6 py-3 rounded-full bg-white/90 hover:bg-white text-[#006569] font-bold text-xs sm:text-sm border border-[#006569]/20 shadow-xs hover:shadow-md flex items-center gap-2 transition cursor-pointer group"
+          >
+            <span>Scroll ke Bawah: Keunggulan &amp; Footer</span>
+            <ArrowDown className="w-4 h-4 text-[#006569] group-hover:translate-y-0.5 transition" />
+          </button>
+          <div
+            onClick={() => scrollToSection("keunggulan-section")}
+            className="flex items-center gap-1.5 text-xs text-slate-400 font-semibold cursor-pointer animate-bounce mt-0.5"
+          >
+            <span>Scroll ke bawah untuk keunggulan</span>
+            <ChevronRight className="w-3.5 h-3.5 rotate-90 text-[#006569]" />
+          </div>
+        </div>
+
       </section>
 
       {/* ========================================================================= */}
-      {/* 4. SECTION 3: KEUNGGULAN (SETELAH DI-SCROLL, JARAK LUAS DAN LEGA)         */}
+      {/* 4. LAYAR 4: KALO DI-SCROLL LAGI -> KEUNGGULAN DAN FOOTER                  */}
       {/* ========================================================================= */}
-      <section id="keunggulan" className="py-24 sm:py-36 border-t border-[#006569]/15 bg-[#f4faf7]/90">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          
-          <div className="text-center space-y-2 mb-10 sm:mb-14">
-            <span className="text-[11px] font-extrabold uppercase tracking-widest text-[#006569] bg-[#E6F4F1] px-4 py-1.5 rounded-full border border-[#006569]/20">
-              Keamanan &amp; Kemudahan Layanan
-            </span>
-            <h3 className="text-2xl sm:text-4xl font-black text-slate-900">
-              3 Keunggulan Utama UNJ Menfess
-            </h3>
+      <div id="keunggulan-section">
+        {/* Keunggulan Content */}
+        <section className="py-24 sm:py-36 border-t border-slate-100 bg-white relative z-10">
+          <div className="max-w-6xl mx-auto px-5 sm:px-8 lg:px-12">
+            
+            <div className="text-center space-y-2 mb-10 sm:mb-14">
+              <span className="text-[11px] font-extrabold uppercase tracking-widest text-[#006569] bg-[#E6F4F1] px-4 py-1.5 rounded-full border border-[#006569]/20">
+                Keamanan &amp; Kemudahan Layanan
+              </span>
+              <h3 className="text-2xl sm:text-4xl font-black text-slate-900">
+                3 Keunggulan Utama UNJ Menfess
+              </h3>
             <p className="text-xs sm:text-sm text-slate-500 max-w-lg mx-auto">
               Dibangun dengan standar keamanan privasi tertinggi agar seluruh civitas akademika UNJ dapat bercerita dengan nyaman.
             </p>
@@ -1246,7 +1339,7 @@ export default function MenfessPage() {
       {/* 5. SECTION 4: FOOTER (JARAK LEGA DI BAGIAN BAWAH)                         */}
       {/* ========================================================================= */}
       <footer className="bg-white border-t border-[#006569]/15">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
+        <div className="max-w-6xl mx-auto px-5 sm:px-8 lg:px-12 py-12 sm:py-16">
           
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8 pb-8 border-b border-slate-100">
             {/* Brand column */}
@@ -1260,7 +1353,7 @@ export default function MenfessPage() {
                 </span>
               </div>
               <p className="text-xs sm:text-sm text-slate-500 max-w-sm leading-relaxed">
-                Platform confession dan ruang curhat mahasiswa Universitas Negeri Jakarta (UNJ). Dilengkapi auto carousel Instagram, anti-spam cerdas, dan enkripsi privasi.
+                Platform aspirasi dan suara bebas mahasiswa Universitas Negeri Jakarta (UNJ). Dilengkapi auto carousel Instagram, anti-spam cerdas, dan enkripsi privasi 100% anonim.
               </p>
             </div>
 
@@ -1270,10 +1363,11 @@ export default function MenfessPage() {
                 Fitur Unggulan
               </h4>
               <ul className="text-xs text-slate-500 space-y-1.5">
+                <li>• Kategori Aspirasi Kampus &amp; Fasilitas</li>
                 <li>• Template Comic Pop-Art &amp; UNJ Gold</li>
-                <li>• Auto Slide Carousel hingga 10 Slide</li>
+                <li>• Auto Slide Carousel hingga 5 Slide</li>
                 <li>• Maskot Interaktif Chirpy UNJ</li>
-                <li>• Tanpa Perlu Login / Registrasi</li>
+                <li>• 100% Anonim Tanpa Login</li>
               </ul>
             </div>
 
@@ -1301,6 +1395,8 @@ export default function MenfessPage() {
 
         </div>
       </footer>
+
+      </div>
 
     </div>
   );
